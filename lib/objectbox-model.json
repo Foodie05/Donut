@@ -1,0 +1,187 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:6379865091478220324",
+      "lastPropertyId": "9:6023182140359671564",
+      "name": "Book",
+      "properties": [
+        {
+          "id": "1:515549750306017101",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4926085433341750152",
+          "name": "filePath",
+          "indexId": "1:2784645128045631049",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:1106043298823627422",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "4:4408829355877209968",
+          "name": "coverPath",
+          "type": 9
+        },
+        {
+          "id": "5:7036169830253348798",
+          "name": "fileHash",
+          "type": 9
+        },
+        {
+          "id": "6:8952857611856345339",
+          "name": "lastReadPage",
+          "type": 6
+        },
+        {
+          "id": "7:6280387640446049340",
+          "name": "totalPages",
+          "type": 6
+        },
+        {
+          "id": "8:6548015145740235673",
+          "name": "addedAt",
+          "type": 10
+        },
+        {
+          "id": "9:6023182140359671564",
+          "name": "lastOpened",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:4222401676141091067",
+      "lastPropertyId": "6:4238803759383350656",
+      "name": "ChatMessage",
+      "properties": [
+        {
+          "id": "1:5032687394109443125",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "3:160554495877423594",
+          "name": "isUser",
+          "type": 1
+        },
+        {
+          "id": "4:5208234107525870656",
+          "name": "timestamp",
+          "type": 10
+        },
+        {
+          "id": "5:7356188830262425925",
+          "name": "pageDataId",
+          "indexId": "2:128695747907237997",
+          "type": 11,
+          "flags": 520,
+          "relationTarget": "PageData"
+        },
+        {
+          "id": "6:4238803759383350656",
+          "name": "text",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:2777067846752820301",
+      "lastPropertyId": "5:5091198670677293746",
+      "name": "PageData",
+      "properties": [
+        {
+          "id": "1:1591640035521152472",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4609370686826265008",
+          "name": "pageIndex",
+          "type": 6
+        },
+        {
+          "id": "3:942070055569246865",
+          "name": "summary",
+          "type": 9
+        },
+        {
+          "id": "4:844172460129893956",
+          "name": "screenshotPath",
+          "type": 9
+        },
+        {
+          "id": "5:5091198670677293746",
+          "name": "bookId",
+          "indexId": "3:6805188514825111571",
+          "type": 11,
+          "flags": 520,
+          "relationTarget": "Book"
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:3026563595357886774",
+      "lastPropertyId": "5:6959346952928767394",
+      "name": "ReadingSession",
+      "properties": [
+        {
+          "id": "1:1393331994838598114",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1076564017031954779",
+          "name": "startTime",
+          "type": 10
+        },
+        {
+          "id": "3:8698210113277131770",
+          "name": "endTime",
+          "type": 10
+        },
+        {
+          "id": "4:5035777397454395313",
+          "name": "duration",
+          "type": 6
+        },
+        {
+          "id": "5:6959346952928767394",
+          "name": "bookId",
+          "indexId": "4:7650041253252762183",
+          "type": 11,
+          "flags": 520,
+          "relationTarget": "Book"
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "4:3026563595357886774",
+  "lastIndexId": "4:7650041253252762183",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [
+    7355032082823092564
+  ],
+  "retiredRelationUids": [],
+  "version": 1
+}
