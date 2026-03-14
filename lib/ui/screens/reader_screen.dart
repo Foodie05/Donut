@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
 import '../../data/repositories/book_repository.dart';
@@ -31,11 +32,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   // Reading Session
   int? _sessionId;
   Timer? _sessionTimer;
-  DateTime? _startTime;
+  DateTime? _activeSegmentStartTime;
+  int _accumulatedActiveSeconds = 0;
+  bool _isReaderForegroundActive = false;
   late final AppLifecycleListener _lifecycleListener;
   late final BookRepository _bookRepository;
 
-  PdfDocument? _document;@override
+  PdfDocument? _document;
+
+  @override
   void initState() {
     super.initState();
     // Capture the repository instance in initState where ref is safe
@@ -80,19 +85,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _startSession() {
-    _startTime = DateTime.now();
-    // Use the captured repository instance
     _sessionId = _bookRepository.startSession(widget.bookId);
+    _accumulatedActiveSeconds = 0;
+    _activeSegmentStartTime = null;
+    _isReaderForegroundActive = false;
+    _setReaderForegroundActive(
+      SchedulerBinding.instance.lifecycleState == null ||
+          SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed,
+    );
     
     // Auto-save every 1 minute
     _sessionTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      if (_sessionId != null && _startTime != null) {
-        final duration = DateTime.now().difference(_startTime!).inSeconds;
-        // Safety check: if duration > 86400 (24h), something is wrong. Restart session.
+      if (_sessionId != null) {
+        final duration = _currentForegroundDurationInSeconds();
         if (duration > 86400) {
-           _endSession();
-           _startSession();
-           return;
+          _endSession();
+          _startSession();
+          return;
         }
         _bookRepository.updateSession(_sessionId!, duration);
       }
@@ -102,61 +111,53 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void _endSession() {
     _sessionTimer?.cancel();
     if (_sessionId != null) {
-      // Final update before closing
-      if (_startTime != null) {
-        final duration = DateTime.now().difference(_startTime!).inSeconds;
-         // Safety check
-         if (duration < 86400) {
-            _bookRepository.updateSession(_sessionId!, duration);
-         }
+      _setReaderForegroundActive(false);
+      final duration = _currentForegroundDurationInSeconds();
+      if (duration < 86400) {
+        _bookRepository.updateSession(_sessionId!, duration);
       }
-      // Use captured repository instance, safe even in dispose
-      _bookRepository.endSession(_sessionId!);
+      _bookRepository.endSession(_sessionId!, duration: duration);
       _sessionId = null;
-      _startTime = null;
+      _activeSegmentStartTime = null;
+      _accumulatedActiveSeconds = 0;
+      _isReaderForegroundActive = false;
     }
   }
 
   void _handleLifecycleChange(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      if (_sessionId != null && _startTime != null) {
-         final duration = DateTime.now().difference(_startTime!).inSeconds;
-         if (duration < 86400) {
-           _bookRepository.updateSession(_sessionId!, duration);
-         }
+      _setReaderForegroundActive(false);
+      if (_sessionId != null) {
+        final duration = _currentForegroundDurationInSeconds();
+        if (duration < 86400) {
+          _bookRepository.updateSession(_sessionId!, duration);
+        }
       }
     } else if (state == AppLifecycleState.resumed) {
-      // Potentially restart session tracking logic if we want to exclude background time.
-      // For now, simpler implementation: just keep updating.
-      // But accurate tracking requires pausing duration accumulation when backgrounded.
-      // Let's implement a pause/resume mechanism for duration.
-      
-      // Actually, ReadingSession usually means "time spent reading".
-      // If app is in background, user is not reading.
-      // So we should probably end session on pause and start new on resume?
-      // Or just pause the timer accumulator.
-      
-      // Prompt requirement: "AppLifecycleListener... record start/end time... prevent data loss on close"
-      // "Auto save every 1 minute... to prevent data loss"
-      
-      // Let's stick to simple start/end for the scope of "ReaderScreen".
-      // If user backgrounds app, they might come back.
-      // If we want precise "duration", we should subtract background time.
-      
-      // Refined logic:
-      // On Pause: Update DB with current duration.
-      // On Resume: Reset _startTime to now? No, that would reset duration calculation.
-      
-      // Correct Logic:
-      // We need to track `accumulatedDuration` and `currentSegmentStartTime`.
-      // But ReadingSession entity has `startTime` and `endTime`.
-      // If we have gaps, it's technically multiple sessions or one session with gaps.
-      // Simple approach: One session per "Open Reader Screen". 
-      // Background time is counted unless we handle it complexly.
-      // Given the requirement "duration (int, seconds)", we can just update it.
-      
-      // Let's just ensure we save on pause.
+      _setReaderForegroundActive(true);
     }
+  }
+
+  void _setReaderForegroundActive(bool isActive) {
+    if (_sessionId == null || _isReaderForegroundActive == isActive) return;
+
+    if (isActive) {
+      _activeSegmentStartTime ??= DateTime.now();
+    } else {
+      if (_activeSegmentStartTime != null) {
+        _accumulatedActiveSeconds += DateTime.now().difference(_activeSegmentStartTime!).inSeconds;
+        _activeSegmentStartTime = null;
+      }
+    }
+
+    _isReaderForegroundActive = isActive;
+  }
+
+  int _currentForegroundDurationInSeconds() {
+    final liveSeconds = _isReaderForegroundActive && _activeSegmentStartTime != null
+        ? DateTime.now().difference(_activeSegmentStartTime!).inSeconds
+        : 0;
+    return _accumulatedActiveSeconds + liveSeconds;
   }
 
   @override
@@ -341,7 +342,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.8),
+                            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Consumer(

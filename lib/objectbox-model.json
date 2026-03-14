@@ -98,7 +98,7 @@
     },
     {
       "id": "3:2777067846752820301",
-      "lastPropertyId": "5:5091198670677293746",
+      "lastPropertyId": "6:8220424342842555514",
       "name": "PageData",
       "properties": [
         {
@@ -129,6 +129,11 @@
           "type": 11,
           "flags": 520,
           "relationTarget": "Book"
+        },
+        {
+          "id": "6:8220424342842555514",
+          "name": "profileId",
+          "type": 9
         }
       ],
       "relations": []

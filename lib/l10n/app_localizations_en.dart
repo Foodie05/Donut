@@ -15,6 +15,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
+  String get reader => 'Reader';
+
+  @override
   String get modelName => 'Model Name';
 
   @override
@@ -22,6 +25,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readingDirection => 'Reading Direction';
+
+  @override
+  String get appearance => 'Appearance';
+
+  @override
+  String get themeMode => 'Theme Mode';
+
+  @override
+  String get followSystem => 'Follow System';
+
+  @override
+  String get lightMode => 'Light';
+
+  @override
+  String get darkMode => 'Dark';
 
   @override
   String get horizontal => 'Horizontal';
@@ -164,6 +182,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pseudoKBModeSubtitle => 'Include previous 2 pages for better context';
+
+  @override
+  String get smoothSummary => 'Smooth Summary';
+
+  @override
+  String get smoothSummarySubtitle => 'When the AI panel is open, pre-generate the next page summary in advance';
+
+  @override
+  String get powerSavingMode => 'Power Saving Mode';
+
+  @override
+  String get powerSavingModeSubtitle => 'When the AI panel is closed, don\'t start new summary tasks or countdowns';
+
+  @override
+  String get summaryProfiles => 'Summary Profiles';
+
+  @override
+  String get createProfile => 'Create Profile';
+
+  @override
+  String get editProfile => 'Edit Profile';
+
+  @override
+  String get viewProfile => 'View Profile';
+
+  @override
+  String get deleteProfile => 'Delete Profile';
+
+  @override
+  String get profileName => 'Profile Name';
+
+  @override
+  String get promptTemplate => 'Prompt Template';
+
+  @override
+  String get copyPrompt => 'Copy Prompt';
+
+  @override
+  String get promptCopied => 'Prompt copied';
+
+  @override
+  String get defaultSummaryProfileSubtitle => 'Built-in default prompt, read-only';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get cancel => 'Cancel';
 
   @override
   String get multiPageContext => 'Multi-page Context Active';

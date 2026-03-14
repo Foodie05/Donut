@@ -19,17 +19,23 @@ SummaryGenerationService summaryGenerationService(Ref ref) {
 
 class SummaryGenerationService {
   final Ref _ref;
-  // Track in-flight requests: bookId_pageIndex -> Future
+  // Track in-flight requests: bookId_pageIndex_profileId -> Future
   final Map<String, Future<void>> _pendingRequests = {};
 
   SummaryGenerationService(this._ref);
 
-  Future<void> ensureSummary(int bookId, int pageIndex, PdfDocument doc, {String? locale}) async {
-    final key = '${bookId}_$pageIndex';
+  Future<void> ensureSummary(
+    int bookId,
+    int pageIndex,
+    String profileId,
+    PdfDocument doc, {
+    String? locale,
+  }) async {
+    final key = '${bookId}_${pageIndex}_$profileId';
     
     // 1. Check DB
     final pageRepo = _ref.read(pageRepositoryProvider);
-    final existingData = pageRepo.getPageData(bookId, pageIndex);
+    final existingData = pageRepo.getPageData(bookId, pageIndex, profileId);
     if (existingData?.summary != null && existingData!.summary!.isNotEmpty) {
       return;
     }
@@ -40,7 +46,7 @@ class SummaryGenerationService {
     }
 
     // 3. Start Request
-    final future = _generateSummary(bookId, pageIndex, doc, locale: locale);
+    final future = _generateSummary(bookId, pageIndex, profileId, doc, locale: locale);
     _pendingRequests[key] = future;
 
     try {
@@ -50,9 +56,20 @@ class SummaryGenerationService {
     }
   }
 
-  Future<void> _generateSummary(int bookId, int pageIndex, PdfDocument doc, {String? locale}) async {
+  bool isSummaryPending(int bookId, int pageIndex, String profileId) {
+    return _pendingRequests.containsKey('${bookId}_${pageIndex}_$profileId');
+  }
+
+  Future<void> _generateSummary(
+    int bookId,
+    int pageIndex,
+    String profileId,
+    PdfDocument doc, {
+    String? locale,
+  }) async {
     final settings = _ref.read(settingsProvider);
     if (!settings.autoGenerate) return;
+    final profile = settings.profileById(profileId);
 
     final aiService = _ref.read(aiServiceProvider);
     final pageRepo = _ref.read(pageRepositoryProvider);
@@ -97,12 +114,11 @@ class SummaryGenerationService {
 
       // Initialize PageData to get ID for streaming updates
       // This ensures we have a valid ID to update incrementally
-      int pageId = pageRepo.savePageSummary(bookId, pageIndex, "", null);
+      int pageId = pageRepo.savePageSummary(bookId, pageIndex, profileId, "", null);
 
       // Call AI Service
       final sb = StringBuffer();
-      // Prompt adjustment based on mode
-      String prompt = "Analyze this PDF page content. Provide a concise summary in Markdown.";
+      String prompt = profile.prompt;
       if (settings.enablePseudoKBMode && base64Images.length > 1) {
         prompt += " Context from previous pages is included. Please analyze comprehensively.";
       }

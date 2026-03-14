@@ -139,7 +139,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(3, 2777067846752820301),
     name: 'PageData',
-    lastPropertyId: const obx_int.IdUid(5, 5091198670677293746),
+    lastPropertyId: const obx_int.IdUid(6, 8220424342842555514),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -174,6 +174,12 @@ final _entities = <obx_int.ModelEntity>[
         indexId: const obx_int.IdUid(3, 6805188514825111571),
         relationField: 'book',
         relationTarget: 'Book',
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 8220424342842555514),
+        name: 'profileId',
+        type: 9,
+        flags: 0,
       ),
     ],
     relations: <obx_int.ModelRelation>[],
@@ -446,12 +452,14 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final screenshotPathOffset = object.screenshotPath == null
             ? null
             : fbb.writeString(object.screenshotPath!);
-        fbb.startTable(6);
+        final profileIdOffset = fbb.writeString(object.profileId);
+        fbb.startTable(7);
         fbb.addInt64(0, object.id);
         fbb.addInt64(1, object.pageIndex);
         fbb.addOffset(2, summaryOffset);
         fbb.addOffset(3, screenshotPathOffset);
         fbb.addInt64(4, object.book.targetId);
+        fbb.addOffset(5, profileIdOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -464,6 +472,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           6,
           0,
         );
+        final profileIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 14, '');
         final summaryParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 8);
@@ -472,6 +483,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         ).vTableGetNullable(buffer, rootOffset, 10);
         final object = PageData(
           pageIndex: pageIndexParam,
+          profileId: profileIdParam,
           summary: summaryParam,
           screenshotPath: screenshotPathParam,
         )..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
@@ -656,6 +668,11 @@ class PageData_ {
   /// See [PageData.book].
   static final book = obx.QueryRelationToOne<PageData, Book>(
     _entities[2].properties[4],
+  );
+
+  /// See [PageData.profileId].
+  static final profileId = obx.QueryStringProperty<PageData>(
+    _entities[2].properties[5],
   );
 
   /// see [PageData.messages]

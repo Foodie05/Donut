@@ -61,11 +61,11 @@ class BookRepository {
     }
   }
 
-  void endSession(int sessionId) {
+  void endSession(int sessionId, {int? duration}) {
     final session = _sessionBox.get(sessionId);
     if (session != null) {
       session.endTime = DateTime.now();
-      session.duration = session.endTime!.difference(session.startTime).inSeconds;
+      session.duration = duration ?? session.endTime!.difference(session.startTime).inSeconds;
       _sessionBox.put(session);
     }
   }

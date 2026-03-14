@@ -8,6 +8,7 @@ class PageData {
   int id = 0;
 
   int pageIndex;
+  String profileId;
   String? summary;
   String? screenshotPath; // Path to the screenshot image
 
@@ -18,6 +19,7 @@ class PageData {
 
   PageData({
     required this.pageIndex,
+    required this.profileId,
     this.summary,
     this.screenshotPath,
   });

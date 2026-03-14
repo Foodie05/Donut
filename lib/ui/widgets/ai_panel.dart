@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -10,10 +9,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:share_plus/share_plus.dart';
 
-import '../../data/models/chat_message.dart';
-import '../../data/models/page_data.dart';
 import '../../data/repositories/page_repository.dart';
 import '../../services/ai_service.dart';
 import '../../services/settings_service.dart';
@@ -63,7 +59,6 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
   
   // Countdown Animation
   late AnimationController _countdownController;
-  PageData? _currentPageData;
 
   // Content Transition Animation
   late AnimationController _contentTransitionController;
@@ -133,8 +128,16 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
       if (widget.isVisible) {
         _slideController.forward();
         _contentTransitionController.reverse(); // Ensure visible
+        final settings = ref.read(settingsProvider);
+        _updateContentToPage(ref.read(currentPageProvider));
+        _scheduleSmoothSummaryPrefetch(ref.read(currentPageProvider), settings);
       } else {
         _slideController.reverse();
+        final settings = ref.read(settingsProvider);
+        if (settings.powerSavingMode) {
+          _countdownController.stop();
+          _countdownController.reset();
+        }
       }
     }
   }
@@ -154,6 +157,7 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
   // Actual content update logic
   void _updateContentToPage(int pageIndex, {bool animateReset = false}) {
     _lastProcessedPage = pageIndex;
+    final profileId = ref.read(settingsProvider).selectedSummaryProfileId;
     
     // Animation handling for countdown reset
     Future<void> resetFuture = Future.value();
@@ -166,60 +170,101 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     }
 
     final repo = ref.read(pageRepositoryProvider);
-    final pageData = repo.getPageData(widget.bookId, pageIndex);
+    final pageData = repo.getPageData(widget.bookId, pageIndex, profileId);
     final settings = ref.read(settingsProvider);
 
     setState(() {
-      _currentPageData = pageData;
       _displayPageIndex = pageIndex; // Important: update display index
     });
     
     // Pre-check if we need to load or countdown
     if (pageData != null && pageData.summary != null && pageData.summary!.isNotEmpty) {
       setState(() => _isLoading = false);
-      // If we have data, we don't need to wait for reset animation to finish to show it?
-      // But circle should probably disappear or reset.
-      // The original logic just did reset().
     } else {
-       setState(() => _isLoading = false);
-       if (settings.autoGenerate) {
-         // Wait for reset to finish before starting new one
-         resetFuture.then((_) {
-            if (mounted && _lastProcessedPage == pageIndex) {
-                _startCountdownForPage(pageIndex, settings);
-            }
-         });
-       } else {
-         _countdownController.reset();
-       }
+      setState(() => _isLoading = false);
+      if (_canAutoStartSummary(settings)) {
+        resetFuture.then((_) {
+          if (mounted && _lastProcessedPage == pageIndex) {
+            _startCountdownForPage(pageIndex, settings);
+          }
+        });
+      } else {
+        _countdownController.reset();
+      }
     }
+
+    _scheduleSmoothSummaryPrefetch(pageIndex, settings);
   }
 
   void _startCountdownForPage(int pageIndex, SettingsModel settings) {
-      final repo = ref.read(pageRepositoryProvider);
-      final currentTrackedIndex = pageIndex;
+    if (!_canAutoStartSummary(settings)) {
+      _countdownController.stop();
+      _countdownController.reset();
+      return;
+    }
+
+    final repo = ref.read(pageRepositoryProvider);
+    final currentTrackedIndex = pageIndex;
+    final profileId = settings.selectedSummaryProfileId;
+    
+    _countdownController.duration = Duration(seconds: settings.debounceSeconds);
+    _countdownController.forward(from: 0).then((_) {
+      if (!mounted || _lastProcessedPage != currentTrackedIndex || !_canAutoStartSummary(settings)) {
+        return;
+      }
       
-      _countdownController.duration = Duration(seconds: settings.debounceSeconds);
-      _countdownController.forward(from: 0).then((_) {
-         if (!mounted || _lastProcessedPage != currentTrackedIndex) return;
-         
-         final freshPageData = repo.getPageData(widget.bookId, currentTrackedIndex);
-         if (freshPageData?.summary != null && freshPageData!.summary!.isNotEmpty) return;
-         
-         if (widget.pdfDocument != null) {
-            setState(() => _isLoading = true);
-            ref.read(summaryGenerationServiceProvider).ensureSummary(
-              widget.bookId, 
-              currentTrackedIndex, 
-              widget.pdfDocument,
-              locale: Localizations.localeOf(context).languageCode,
-            ).then((_) {
-              if (mounted && _lastProcessedPage == currentTrackedIndex) {
-                 setState(() => _isLoading = false);
-              }
-            });
-         }
-      });
+      final freshPageData = repo.getPageData(widget.bookId, currentTrackedIndex, profileId);
+      if (freshPageData?.summary != null && freshPageData!.summary!.isNotEmpty) return;
+      
+      if (widget.pdfDocument != null) {
+        setState(() => _isLoading = true);
+        ref.read(summaryGenerationServiceProvider).ensureSummary(
+          widget.bookId, 
+          currentTrackedIndex, 
+          profileId,
+          widget.pdfDocument,
+          locale: Localizations.localeOf(context).languageCode,
+        ).then((_) {
+          if (mounted && _lastProcessedPage == currentTrackedIndex) {
+            setState(() => _isLoading = false);
+          }
+        });
+      }
+    });
+  }
+
+  bool _canAutoStartSummary(SettingsModel settings) {
+    if (!settings.autoGenerate) return false;
+    if (settings.powerSavingMode && !widget.isVisible) return false;
+    return true;
+  }
+
+  void _scheduleSmoothSummaryPrefetch(int currentPageIndex, SettingsModel settings) {
+    if (!widget.isVisible || !settings.autoGenerate || !settings.smoothSummary || widget.pdfDocument == null) {
+      return;
+    }
+
+    final doc = widget.pdfDocument as PdfDocument;
+    final nextPageIndex = currentPageIndex + 1;
+    if (nextPageIndex < 1 || nextPageIndex > doc.pages.length) return;
+    final profileId = settings.selectedSummaryProfileId;
+
+    final repo = ref.read(pageRepositoryProvider);
+    final nextPageData = repo.getPageData(widget.bookId, nextPageIndex, profileId);
+    if (nextPageData?.summary != null && nextPageData!.summary!.isNotEmpty) return;
+
+    final summaryService = ref.read(summaryGenerationServiceProvider);
+    if (summaryService.isSummaryPending(widget.bookId, nextPageIndex, profileId)) return;
+
+    unawaited(
+      summaryService.ensureSummary(
+        widget.bookId,
+        nextPageIndex,
+        profileId,
+        doc,
+        locale: Localizations.localeOf(context).languageCode,
+      ),
+    );
   }
 
   @override
@@ -229,6 +274,14 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     final settings = ref.watch(settingsProvider);
     final panelWidth = ref.watch(aiPanelWidthProvider);
     final l10n = AppLocalizations.of(context)!;
+
+    ref.listen<String>(
+      settingsProvider.select((value) => value.selectedSummaryProfileId),
+      (previous, next) {
+        if (previous == next) return;
+        _handlePageChange(_displayPageIndex, ref.read(settingsProvider));
+      },
+    );
 
     // Listen to page changes
     ref.listen(currentPageProvider, (previous, next) {
@@ -300,14 +353,42 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                     ),
                     child: Consumer(
                       builder: (context, ref, _) {
-                        final pageDataAsync = ref.watch(watchPageDataProvider((bookId: widget.bookId, pageIndex: _displayPageIndex)));
+                        final settings = ref.watch(settingsProvider);
+                        final pageDataAsync = ref.watch(
+                          watchPageDataProvider(
+                            (
+                              bookId: widget.bookId,
+                              pageIndex: _displayPageIndex,
+                              profileId: settings.selectedSummaryProfileId,
+                            ),
+                          ),
+                        );
                         final pageData = pageDataAsync.value;
                         final displaySummary = pageData?.summary;
                         
                         return Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(child: Text('${l10n.pageSummary} $_displayPageIndex', style: theme.textTheme.titleSmall)),
+                            Expanded(
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: settings.selectedSummaryProfileId,
+                                  items: settings.summaryProfiles
+                                      .map(
+                                        (profile) => DropdownMenuItem<String>(
+                                          value: profile.id,
+                                          child: Text(profile.name),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    ref.read(settingsProvider.notifier).setSelectedSummaryProfile(value);
+                                  },
+                                ),
+                              ),
+                            ),
                             Row(
                               children: [
                                 IconButton(
@@ -318,12 +399,6 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                     }
                                   },
                                   tooltip: 'Copy Summary',
-                                ),
-                                const Gap(4),
-                                IconButton(
-                                  icon: const Icon(Icons.share, size: 20),
-                                  onPressed: () => _exportContent(_displayPageIndex),
-                                  tooltip: 'Export Page Content',
                                 ),
                                 const Gap(4),
                                 IconButton(
@@ -385,7 +460,16 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                 padding: const EdgeInsets.all(16.0),
                                 child: Consumer(
                                   builder: (context, ref, _) {
-                                    final pageDataAsync = ref.watch(watchPageDataProvider((bookId: widget.bookId, pageIndex: _displayPageIndex)));
+                                    final settings = ref.watch(settingsProvider);
+                                    final pageDataAsync = ref.watch(
+                                      watchPageDataProvider(
+                                        (
+                                          bookId: widget.bookId,
+                                          pageIndex: _displayPageIndex,
+                                          profileId: settings.selectedSummaryProfileId,
+                                        ),
+                                      ),
+                                    );
                                     final pageData = pageDataAsync.value;
                                     final displaySummary = pageData?.summary;
 
@@ -394,7 +478,7 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.surface,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                                        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
                                       ),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,8 +543,8 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                           // Priority 3: Content
                                           else
                                             StreamingTypewriterText(
-                                              key: ValueKey(_displayPageIndex), 
-                                              text: displaySummary!,
+                                              key: ValueKey('${settings.selectedSummaryProfileId}_$_displayPageIndex'),
+                                              text: displaySummary,
                                               speed: const Duration(milliseconds: 20),
                                               isStreaming: _isLoading, 
                                             ),
@@ -475,7 +559,16 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                             // 2.2 Chat History
                             Consumer(
                               builder: (context, ref, _) {
-                                final pageDataAsync = ref.watch(watchPageDataProvider((bookId: widget.bookId, pageIndex: _displayPageIndex)));
+                                final settings = ref.watch(settingsProvider);
+                                final pageDataAsync = ref.watch(
+                                  watchPageDataProvider(
+                                    (
+                                      bookId: widget.bookId,
+                                      pageIndex: _displayPageIndex,
+                                      profileId: settings.selectedSummaryProfileId,
+                                    ),
+                                  ),
+                                );
                                 final pageData = pageDataAsync.value;
                                 if (pageData == null) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
@@ -595,8 +688,9 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     // This makes scrolling through empty pages feel faster/more responsive
     
     final repo = ref.read(pageRepositoryProvider);
-    final currentPageData = repo.getPageData(widget.bookId, _displayPageIndex);
-    final nextPageData = repo.getPageData(widget.bookId, pageIndex);
+    final profileId = settings.selectedSummaryProfileId;
+    final currentPageData = repo.getPageData(widget.bookId, _displayPageIndex, profileId);
+    final nextPageData = repo.getPageData(widget.bookId, pageIndex, profileId);
     
     final currentHasData = currentPageData?.summary != null && currentPageData!.summary!.isNotEmpty;
     final nextHasData = nextPageData?.summary != null && nextPageData!.summary!.isNotEmpty;
@@ -696,15 +790,16 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     setState(() {
       _isLoading = true;
     });
+    final settings = ref.read(settingsProvider);
+    final profileId = settings.selectedSummaryProfileId;
     
     if (widget.pdfDocument != null) {
-      // Force regeneration by clearing existing summary first?
-      // Service checks DB. If we want to force, we might need to clear DB first.
-      ref.read(pageRepositoryProvider).savePageSummary(widget.bookId, pageIndex, "", null);
+      ref.read(pageRepositoryProvider).savePageSummary(widget.bookId, pageIndex, profileId, "", null);
       
       await ref.read(summaryGenerationServiceProvider).ensureSummary(
         widget.bookId, 
         pageIndex, 
+        profileId,
         widget.pdfDocument,
         locale: Localizations.localeOf(context).languageCode,
       );
@@ -712,7 +807,6 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     
     if (mounted) {
       setState(() {
-        _currentPageData = ref.read(pageRepositoryProvider).getPageData(widget.bookId, pageIndex);
         _isLoading = false;
       });
     }
@@ -723,21 +817,19 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     
     final pageIndex = ref.read(currentPageProvider);
     final repo = ref.read(pageRepositoryProvider);
+    final profileId = ref.read(settingsProvider).selectedSummaryProfileId;
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).toString();
     
     // Ensure PageData exists
-    var pageData = repo.getPageData(widget.bookId, pageIndex);
+    var pageData = repo.getPageData(widget.bookId, pageIndex, profileId);
     if (pageData == null) {
-       repo.savePageSummary(widget.bookId, pageIndex, "", null);
-       pageData = repo.getPageData(widget.bookId, pageIndex);
+       repo.savePageSummary(widget.bookId, pageIndex, profileId, "", null);
+       pageData = repo.getPageData(widget.bookId, pageIndex, profileId);
     }
     
     if (pageData == null) return;
     
-    setState(() {
-      _currentPageData = pageData;
-    });
-
     repo.addMessage(pageData.id, text, true);
     _chatController.clear();
     
@@ -762,7 +854,6 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     final history = repo.getRecentMessages(pageData.id);
     final aiService = ref.read(aiServiceProvider);
     final StringBuffer responseBuffer = StringBuffer();
-    final locale = Localizations.localeOf(context).toString();
     
     // Add temporary AI loading message
     final loadingMsgId = repo.addMessage(pageData.id, "", false);
@@ -800,42 +891,6 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
           setState(() => _isLoading = false);
       }
     }
-  }
-
-  Future<void> _exportContent(int pageNumber) async {
-    final l10n = AppLocalizations.of(context)!;
-    final sb = StringBuffer();
-    sb.writeln('${l10n.pageSummary} $pageNumber');
-    sb.writeln('=' * 20);
-    sb.writeln();
-    
-    // Use currentPageData summary directly
-    final currentSummary = _currentPageData?.summary;
-    if (currentSummary != null && currentSummary.isNotEmpty) {
-      sb.writeln(l10n.aiSummary);
-      sb.writeln('-' * 10);
-      sb.writeln(currentSummary);
-      sb.writeln();
-    }
-    
-    if (_currentPageData != null) {
-      // Fetch recent messages synchronously (or we need to add a method to repo to get all)
-      // For now, let's just use what's available or implement a getAllMessages
-      final messages = ref.read(pageRepositoryProvider).getRecentMessages(_currentPageData!.id, limit: 100);
-      if (messages.isNotEmpty) {
-        sb.writeln(l10n.chat);
-        sb.writeln('-' * 10);
-        for (final msg in messages) {
-          sb.writeln('${msg.isUser ? "User" : "AI"}: ${msg.text}');
-          sb.writeln();
-        }
-      }
-    }
-    
-    final text = sb.toString();
-    if (text.trim().isEmpty) return;
-    
-    await Share.share(text, subject: '${l10n.pageSummary} $pageNumber');
   }
 
   void _copyToClipboard(String text) {

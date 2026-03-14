@@ -14,8 +14,9 @@ PageRepository pageRepository(Ref ref) {
 }
 
 // Manual providers to handle stream subscription sharing
-final watchPageDataProvider = StreamProvider.autoDispose.family<PageData?, ({int bookId, int pageIndex})>((ref, args) {
-  return ref.watch(pageRepositoryProvider).watchPageData(args.bookId, args.pageIndex);
+final watchPageDataProvider =
+    StreamProvider.autoDispose.family<PageData?, ({int bookId, int pageIndex, String profileId})>((ref, args) {
+  return ref.watch(pageRepositoryProvider).watchPageData(args.bookId, args.pageIndex, args.profileId);
 });
 
 final watchMessagesProvider = StreamProvider.autoDispose.family<List<ChatMessage>, int>((ref, pageDataId) {
@@ -32,32 +33,43 @@ class PageRepository {
     _messageBox = _store.box<ChatMessage>();
   }
 
-  PageData? getPageData(int bookId, int pageIndex) {
+  PageData? getPageData(int bookId, int pageIndex, String profileId) {
     final query = _pageBox.query(
-      PageData_.book.equals(bookId).and(PageData_.pageIndex.equals(pageIndex))
+      PageData_.book.equals(bookId)
+          .and(PageData_.pageIndex.equals(pageIndex))
+          .and(PageData_.profileId.equals(profileId))
     ).build();
     final result = query.findFirst();
     query.close();
     return result;
   }
 
-  Stream<PageData?> watchPageData(int bookId, int pageIndex) {
+  Stream<PageData?> watchPageData(int bookId, int pageIndex, String profileId) {
     return _pageBox
-        .query(PageData_.book.equals(bookId).and(PageData_.pageIndex.equals(pageIndex)))
+        .query(
+          PageData_.book.equals(bookId)
+              .and(PageData_.pageIndex.equals(pageIndex))
+              .and(PageData_.profileId.equals(profileId)),
+        )
         .watch(triggerImmediately: true)
         .map((query) => query.findFirst());
   }
 
-  int savePageSummary(int bookId, int pageIndex, String summary, String? screenshotPath) {
+  int savePageSummary(int bookId, int pageIndex, String profileId, String summary, String? screenshotPath) {
     return _store.runInTransaction(TxMode.write, () {
       final query = _pageBox.query(
-        PageData_.book.equals(bookId).and(PageData_.pageIndex.equals(pageIndex))
+        PageData_.book.equals(bookId)
+            .and(PageData_.pageIndex.equals(pageIndex))
+            .and(PageData_.profileId.equals(profileId))
       ).build();
       var pageData = query.findFirst();
       query.close();
 
       if (pageData == null) {
-        pageData = PageData(pageIndex: pageIndex);
+        pageData = PageData(
+          pageIndex: pageIndex,
+          profileId: profileId,
+        );
         pageData.book.targetId = bookId;
       }
 

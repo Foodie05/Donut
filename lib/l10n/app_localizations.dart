@@ -107,6 +107,12 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settings;
 
+  /// No description provided for @reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Reader'**
+  String get reader;
+
   /// No description provided for @modelName.
   ///
   /// In en, this message translates to:
@@ -124,6 +130,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reading Direction'**
   String get readingDirection;
+
+  /// No description provided for @appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get appearance;
+
+  /// No description provided for @themeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme Mode'**
+  String get themeMode;
+
+  /// No description provided for @followSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow System'**
+  String get followSystem;
+
+  /// No description provided for @lightMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get lightMode;
+
+  /// No description provided for @darkMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get darkMode;
 
   /// No description provided for @horizontal.
   ///
@@ -400,6 +436,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Include previous 2 pages for better context'**
   String get pseudoKBModeSubtitle;
+
+  /// No description provided for @smoothSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Smooth Summary'**
+  String get smoothSummary;
+
+  /// No description provided for @smoothSummarySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When the AI panel is open, pre-generate the next page summary in advance'**
+  String get smoothSummarySubtitle;
+
+  /// No description provided for @powerSavingMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Power Saving Mode'**
+  String get powerSavingMode;
+
+  /// No description provided for @powerSavingModeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When the AI panel is closed, don\'t start new summary tasks or countdowns'**
+  String get powerSavingModeSubtitle;
+
+  /// No description provided for @summaryProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary Profiles'**
+  String get summaryProfiles;
+
+  /// No description provided for @createProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Profile'**
+  String get createProfile;
+
+  /// No description provided for @editProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get editProfile;
+
+  /// No description provided for @viewProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'View Profile'**
+  String get viewProfile;
+
+  /// No description provided for @deleteProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Profile'**
+  String get deleteProfile;
+
+  /// No description provided for @profileName.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile Name'**
+  String get profileName;
+
+  /// No description provided for @promptTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt Template'**
+  String get promptTemplate;
+
+  /// No description provided for @copyPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Prompt'**
+  String get copyPrompt;
+
+  /// No description provided for @promptCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt copied'**
+  String get promptCopied;
+
+  /// No description provided for @defaultSummaryProfileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in default prompt, read-only'**
+  String get defaultSummaryProfileSubtitle;
+
+  /// No description provided for @save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
 
   /// No description provided for @multiPageContext.
   ///

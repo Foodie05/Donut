@@ -15,6 +15,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settings => '设置';
 
   @override
+  String get reader => '阅读器';
+
+  @override
   String get modelName => '模型名称';
 
   @override
@@ -22,6 +25,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readingDirection => '阅读方向';
+
+  @override
+  String get appearance => '外观';
+
+  @override
+  String get themeMode => '主题模式';
+
+  @override
+  String get followSystem => '跟随系统';
+
+  @override
+  String get lightMode => '浅色';
+
+  @override
+  String get darkMode => '深色';
 
   @override
   String get horizontal => '横向';
@@ -164,6 +182,54 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pseudoKBModeSubtitle => '包含前两页内容以增强上下文理解';
+
+  @override
+  String get smoothSummary => '平滑的摘要';
+
+  @override
+  String get smoothSummarySubtitle => 'AI 面板开启时，提前生成下一页摘要';
+
+  @override
+  String get powerSavingMode => '节能模式';
+
+  @override
+  String get powerSavingModeSubtitle => 'AI 面板关闭时，不启动新的摘要任务和倒计时';
+
+  @override
+  String get summaryProfiles => '摘要配置文件';
+
+  @override
+  String get createProfile => '新建配置';
+
+  @override
+  String get editProfile => '编辑配置';
+
+  @override
+  String get viewProfile => '查看配置';
+
+  @override
+  String get deleteProfile => '删除配置';
+
+  @override
+  String get profileName => '配置名称';
+
+  @override
+  String get promptTemplate => '提示词模板';
+
+  @override
+  String get copyPrompt => '复制提示词';
+
+  @override
+  String get promptCopied => '提示词已复制';
+
+  @override
+  String get defaultSummaryProfileSubtitle => '内置默认提示词，不可编辑';
+
+  @override
+  String get save => '保存';
+
+  @override
+  String get cancel => '取消';
 
   @override
   String get multiPageContext => '多页上下文已开启';
