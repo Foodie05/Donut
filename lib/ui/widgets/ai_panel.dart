@@ -26,11 +26,12 @@ class AiPanel extends ConsumerStatefulWidget {
   final VoidCallback onClose;
   // We need PdfDocument for rendering in background service
   // But AiPanel might not have direct access easily unless passed down
-  // or accessed via a provider. 
+  // or accessed via a provider.
   // Ideally, SummaryGenerationService should get PdfDocument from somewhere.
   // For now, let's assume we pass it or the service can retrieve it if we store it in a provider.
   // Actually, ReaderScreen has _document. We can pass it here.
-  final dynamic pdfDocument; // PdfDocument type, dynamic to avoid import issues if not exported well or just import pdfrx
+  final dynamic
+  pdfDocument; // PdfDocument type, dynamic to avoid import issues if not exported well or just import pdfrx
 
   const AiPanel({
     super.key,
@@ -45,18 +46,19 @@ class AiPanel extends ConsumerStatefulWidget {
   ConsumerState<AiPanel> createState() => _AiPanelState();
 }
 
-class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin {
+class _AiPanelState extends ConsumerState<AiPanel>
+    with TickerProviderStateMixin {
   StreamSubscription? _aiSubscription;
   Timer? _debounce;
   // Remove local _summary state, rely on DB/Stream
   // But for smooth transition we might want to keep local until stream updates
   // Actually, using StreamBuilder on the specific page data is better.
-  
+
   bool _isLoading = false;
   int? _lastProcessedPage;
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+
   // Countdown Animation
   late AnimationController _countdownController;
 
@@ -81,22 +83,23 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(1.0, 0.0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+        );
 
     _contentTransitionController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300), // Total cycle: 150ms out + 150ms in
+      duration: const Duration(
+        milliseconds: 300,
+      ), // Total cycle: 150ms out + 150ms in
     );
-    _contentFadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(CurvedAnimation(
-      parent: _contentTransitionController,
-      curve: Curves.easeInOutCubic,
-    ));
+    _contentFadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _contentTransitionController,
+        curve: Curves.easeInOutCubic,
+      ),
+    );
 
     // Listen to transition status
     _contentTransitionController.addStatusListener((status) {
@@ -111,11 +114,15 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     _countdownController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2), // 2s per cycle
-    )..repeat();
-    
+    );
+
     if (widget.isVisible) {
       _slideController.value = 1.0;
       _contentTransitionController.value = 0.0; // Visible
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _updateContentToPage(_displayPageIndex);
+      });
     } else {
       _contentTransitionController.value = 1.0; // Hidden
     }
@@ -158,15 +165,20 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
   void _updateContentToPage(int pageIndex, {bool animateReset = false}) {
     _lastProcessedPage = pageIndex;
     final profileId = ref.read(settingsProvider).selectedSummaryProfileId;
-    
+
     // Animation handling for countdown reset
     Future<void> resetFuture = Future.value();
-    if (animateReset && (_countdownController.value > 0 || _countdownController.isAnimating)) {
-        _countdownController.stop(); // Stop current forward
-        resetFuture = _countdownController.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+    if (animateReset &&
+        (_countdownController.value > 0 || _countdownController.isAnimating)) {
+      _countdownController.stop(); // Stop current forward
+      resetFuture = _countdownController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
     } else {
-        _countdownController.stop();
-        _countdownController.reset();
+      _countdownController.stop();
+      _countdownController.reset();
     }
 
     final repo = ref.read(pageRepositoryProvider);
@@ -176,9 +188,11 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     setState(() {
       _displayPageIndex = pageIndex; // Important: update display index
     });
-    
+
     // Pre-check if we need to load or countdown
-    if (pageData != null && pageData.summary != null && pageData.summary!.isNotEmpty) {
+    if (pageData != null &&
+        pageData.summary != null &&
+        pageData.summary!.isNotEmpty) {
       setState(() => _isLoading = false);
     } else {
       setState(() => _isLoading = false);
@@ -206,29 +220,39 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     final repo = ref.read(pageRepositoryProvider);
     final currentTrackedIndex = pageIndex;
     final profileId = settings.selectedSummaryProfileId;
-    
+
     _countdownController.duration = Duration(seconds: settings.debounceSeconds);
     _countdownController.forward(from: 0).then((_) {
-      if (!mounted || _lastProcessedPage != currentTrackedIndex || !_canAutoStartSummary(settings)) {
+      if (!mounted ||
+          _lastProcessedPage != currentTrackedIndex ||
+          !_canAutoStartSummary(settings)) {
         return;
       }
-      
-      final freshPageData = repo.getPageData(widget.bookId, currentTrackedIndex, profileId);
-      if (freshPageData?.summary != null && freshPageData!.summary!.isNotEmpty) return;
-      
+
+      final freshPageData = repo.getPageData(
+        widget.bookId,
+        currentTrackedIndex,
+        profileId,
+      );
+      if (freshPageData?.summary != null && freshPageData!.summary!.isNotEmpty)
+        return;
+
       if (widget.pdfDocument != null) {
         setState(() => _isLoading = true);
-        ref.read(summaryGenerationServiceProvider).ensureSummary(
-          widget.bookId, 
-          currentTrackedIndex, 
-          profileId,
-          widget.pdfDocument,
-          locale: Localizations.localeOf(context).languageCode,
-        ).then((_) {
-          if (mounted && _lastProcessedPage == currentTrackedIndex) {
-            setState(() => _isLoading = false);
-          }
-        });
+        ref
+            .read(summaryGenerationServiceProvider)
+            .ensureSummary(
+              widget.bookId,
+              currentTrackedIndex,
+              profileId,
+              widget.pdfDocument,
+              locale: Localizations.localeOf(context).languageCode,
+            )
+            .then((_) {
+              if (mounted && _lastProcessedPage == currentTrackedIndex) {
+                setState(() => _isLoading = false);
+              }
+            });
       }
     });
   }
@@ -239,8 +263,14 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     return true;
   }
 
-  void _scheduleSmoothSummaryPrefetch(int currentPageIndex, SettingsModel settings) {
-    if (!widget.isVisible || !settings.autoGenerate || !settings.smoothSummary || widget.pdfDocument == null) {
+  void _scheduleSmoothSummaryPrefetch(
+    int currentPageIndex,
+    SettingsModel settings,
+  ) {
+    if (!widget.isVisible ||
+        !settings.autoGenerate ||
+        !settings.smoothSummary ||
+        widget.pdfDocument == null) {
       return;
     }
 
@@ -250,11 +280,21 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     final profileId = settings.selectedSummaryProfileId;
 
     final repo = ref.read(pageRepositoryProvider);
-    final nextPageData = repo.getPageData(widget.bookId, nextPageIndex, profileId);
-    if (nextPageData?.summary != null && nextPageData!.summary!.isNotEmpty) return;
+    final nextPageData = repo.getPageData(
+      widget.bookId,
+      nextPageIndex,
+      profileId,
+    );
+    if (nextPageData?.summary != null && nextPageData!.summary!.isNotEmpty)
+      return;
 
     final summaryService = ref.read(summaryGenerationServiceProvider);
-    if (summaryService.isSummaryPending(widget.bookId, nextPageIndex, profileId)) return;
+    if (summaryService.isSummaryPending(
+      widget.bookId,
+      nextPageIndex,
+      profileId,
+    ))
+      return;
 
     unawaited(
       summaryService.ensureSummary(
@@ -286,15 +326,15 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     // Listen to page changes
     ref.listen(currentPageProvider, (previous, next) {
       if (next == _displayPageIndex) return;
-      
+
       // Cleanup previous page logic
       _handlePageChange(next, settings);
-      
+
       // Animation is triggered by _handlePageChange via _contentTransitionController.forward()
       // We don't need to manually trigger it here again, or we might double-trigger.
       // _handlePageChange calls forward(). The listener on controller calls _updateContentToPage + reverse().
     });
-    
+
     // Initial load if needed
     if (_lastProcessedPage == null && currentPage > 0) {
       Future.microtask(() => _handlePageChange(currentPage, settings));
@@ -320,21 +360,21 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                 // Dragging right (positive dx) decreases width
                 final newWidth = panelWidth - details.delta.dx;
                 if (newWidth >= minWidth && newWidth <= maxWidth) {
-                   ref.read(aiPanelWidthProvider.notifier).setWidth(newWidth);
+                  ref.read(aiPanelWidthProvider.notifier).setWidth(newWidth);
                 }
               },
               child: Container(
                 width: 8,
                 color: Colors.transparent, // Invisible handle area
                 child: VerticalDivider(
-                  width: 1, 
-                  thickness: 1, 
-                  color: theme.colorScheme.outlineVariant
+                  width: 1,
+                  thickness: 1,
+                  color: theme.colorScheme.outlineVariant,
                 ),
               ),
             ),
           ),
-          
+
           // Main Panel Content
           SizedBox(
             width: panelWidth,
@@ -346,26 +386,31 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                 children: [
                   // 1. Header (Static - No Blur/Fade)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHigh,
-                      border: Border(bottom: BorderSide(color: theme.colorScheme.outlineVariant)),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
+                      ),
                     ),
                     child: Consumer(
                       builder: (context, ref, _) {
                         final settings = ref.watch(settingsProvider);
                         final pageDataAsync = ref.watch(
-                          watchPageDataProvider(
-                            (
-                              bookId: widget.bookId,
-                              pageIndex: _displayPageIndex,
-                              profileId: settings.selectedSummaryProfileId,
-                            ),
-                          ),
+                          watchPageDataProvider((
+                            bookId: widget.bookId,
+                            pageIndex: _displayPageIndex,
+                            profileId: settings.selectedSummaryProfileId,
+                          )),
                         );
                         final pageData = pageDataAsync.value;
                         final displaySummary = pageData?.summary;
-                        
+
                         return Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -384,7 +429,9 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                       .toList(),
                                   onChanged: (value) {
                                     if (value == null) return;
-                                    ref.read(settingsProvider.notifier).setSelectedSummaryProfile(value);
+                                    ref
+                                        .read(settingsProvider.notifier)
+                                        .setSelectedSummaryProfile(value);
                                   },
                                 ),
                               ),
@@ -394,7 +441,8 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                 IconButton(
                                   icon: const Icon(Icons.copy, size: 20),
                                   onPressed: () {
-                                    if (displaySummary != null && displaySummary.isNotEmpty) {
+                                    if (displaySummary != null &&
+                                        displaySummary.isNotEmpty) {
                                       _copyToClipboard(displaySummary);
                                     }
                                   },
@@ -403,7 +451,10 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                 const Gap(4),
                                 IconButton(
                                   icon: const Icon(Icons.refresh, size: 20),
-                                  onPressed: _isLoading ? null : () => _refreshSummary(_displayPageIndex),
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () =>
+                                            _refreshSummary(_displayPageIndex),
                                   tooltip: l10n.regenerateSummary,
                                 ),
                                 const Gap(4),
@@ -416,7 +467,7 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                             ),
                           ],
                         );
-                      }
+                      },
                     ),
                   ),
 
@@ -426,30 +477,30 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                       child: AnimatedBuilder(
                         animation: _contentTransitionController,
                         builder: (context, child) {
-                           // _contentFadeAnimation goes from 1.0 (Visible) to 0.0 (Hidden)
-                           final visibility = _contentFadeAnimation.value;
-                           
-                           // Optimization: If hidden, don't paint
-                           if (visibility <= 0) return const SizedBox();
-                           
-                           // Apply Blur and Opacity
-                           // Blur: 10.0 (Hidden) -> 0.0 (Visible)
-                           // Opacity: 0.0 (Hidden) -> 1.0 (Visible)
-                           final blur = (1.0 - visibility) * 10.0;
-                           final opacity = visibility.clamp(0.0, 1.0);
-                           
-                           Widget content = child!;
-                           if (blur > 0) {
-                             content = ImageFiltered(
-                               imageFilter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-                               child: content,
-                             );
-                           }
-                           
-                           return Opacity(
-                             opacity: opacity,
-                             child: content,
-                           );
+                          // _contentFadeAnimation goes from 1.0 (Visible) to 0.0 (Hidden)
+                          final visibility = _contentFadeAnimation.value;
+
+                          // Optimization: If hidden, don't paint
+                          if (visibility <= 0) return const SizedBox();
+
+                          // Apply Blur and Opacity
+                          // Blur: 10.0 (Hidden) -> 0.0 (Visible)
+                          // Opacity: 0.0 (Hidden) -> 1.0 (Visible)
+                          final blur = (1.0 - visibility) * 10.0;
+                          final opacity = visibility.clamp(0.0, 1.0);
+
+                          Widget content = child!;
+                          if (blur > 0) {
+                            content = ImageFiltered(
+                              imageFilter: ui.ImageFilter.blur(
+                                sigmaX: blur,
+                                sigmaY: blur,
+                              ),
+                              child: content,
+                            );
+                          }
+
+                          return Opacity(opacity: opacity, child: content);
                         },
                         child: CustomScrollView(
                           controller: _scrollController,
@@ -460,15 +511,16 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                 padding: const EdgeInsets.all(16.0),
                                 child: Consumer(
                                   builder: (context, ref, _) {
-                                    final settings = ref.watch(settingsProvider);
+                                    final settings = ref.watch(
+                                      settingsProvider,
+                                    );
                                     final pageDataAsync = ref.watch(
-                                      watchPageDataProvider(
-                                        (
-                                          bookId: widget.bookId,
-                                          pageIndex: _displayPageIndex,
-                                          profileId: settings.selectedSummaryProfileId,
-                                        ),
-                                      ),
+                                      watchPageDataProvider((
+                                        bookId: widget.bookId,
+                                        pageIndex: _displayPageIndex,
+                                        profileId:
+                                            settings.selectedSummaryProfileId,
+                                      )),
                                     );
                                     final pageData = pageDataAsync.value;
                                     final displaySummary = pageData?.summary;
@@ -478,151 +530,246 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.surface,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                                        border: Border.all(
+                                          color: theme
+                                              .colorScheme
+                                              .outlineVariant
+                                              .withValues(alpha: 0.5),
+                                        ),
                                       ),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
-                                              Icon(Icons.auto_awesome, size: 16, color: theme.colorScheme.primary),
+                                              Icon(
+                                                Icons.auto_awesome,
+                                                size: 16,
+                                                color:
+                                                    theme.colorScheme.primary,
+                                              ),
                                               const Gap(8),
-                                              Text(l10n.aiSummary, style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary)),
+                                              Text(
+                                                l10n.aiSummary,
+                                                style: theme
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      color: theme
+                                                          .colorScheme
+                                                          .primary,
+                                                    ),
+                                              ),
                                               const Spacer(),
                                               if (settings.enablePseudoKBMode)
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
                                                   decoration: BoxDecoration(
-                                                    color: theme.colorScheme.secondaryContainer,
-                                                    borderRadius: BorderRadius.circular(4),
+                                                    color: theme
+                                                        .colorScheme
+                                                        .secondaryContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
                                                   ),
                                                   child: Text(
                                                     l10n.multiPageContext,
-                                                    style: theme.textTheme.labelSmall?.copyWith(fontSize: 10, color: theme.colorScheme.onSecondaryContainer),
+                                                    style: theme
+                                                        .textTheme
+                                                        .labelSmall
+                                                        ?.copyWith(
+                                                          fontSize: 10,
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onSecondaryContainer,
+                                                        ),
                                                   ),
                                                 ),
                                             ],
                                           ),
                                           const Gap(8),
                                           // Priority 1: Loading (Show if loading AND no summary text yet)
-                                          if (_isLoading && (displaySummary == null || displaySummary.isEmpty))
-                                            const Center(child: Padding(
-                                              padding: EdgeInsets.all(8.0),
-                                              child: CircularProgressIndicator(),
-                                            ))
+                                          if (_isLoading &&
+                                              (displaySummary == null ||
+                                                  displaySummary.isEmpty))
+                                            const Center(
+                                              child: Padding(
+                                                padding: EdgeInsets.all(8.0),
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                            )
                                           // Priority 2: Countdown (Show if NOT loading and no summary text yet)
                                           // Ensure it shows when we are waiting (countdown running)
-                                          else if (displaySummary == null || displaySummary.isEmpty)
-                                            Center(child: Padding(
-                                              padding: const EdgeInsets.all(8.0),
-                                              child: AnimatedBuilder(
-                                                animation: _countdownController,
-                                                builder: (context, child) {
-                                                  // Only show if we have a valid countdown value or it's animating
-                                                  // But we want it visible even at 0 if we are waiting for trigger?
-                                                  // No, usually it animates 0->1.
-                                                  // If value is 0 and not animating, maybe we shouldn't show it unless we want to show "ready"?
-                                                  // Let's show it if value > 0 or animating.
-                                                  if (_countdownController.value > 0 || _countdownController.isAnimating) {
-                                                    return CircularProgressIndicator(
-                                                      value: _countdownController.value,
-                                                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                                                    );
-                                                  } else {
-                                                    // If not animating and 0, maybe just a placeholder or empty?
-                                                    // User said "circle disappeared". Maybe it's resetting too fast or not starting?
-                                                    // Let's ensure we show SOMETHING if no summary.
-                                                    return CircularProgressIndicator(
-                                                      value: 0,
-                                                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                                                    );
-                                                  }
-                                                },
+                                          else if (displaySummary == null ||
+                                              displaySummary.isEmpty)
+                                            Center(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  8.0,
+                                                ),
+                                                child: AnimatedBuilder(
+                                                  animation:
+                                                      _countdownController,
+                                                  builder: (context, child) {
+                                                    // Only show if we have a valid countdown value or it's animating
+                                                    // But we want it visible even at 0 if we are waiting for trigger?
+                                                    // No, usually it animates 0->1.
+                                                    // If value is 0 and not animating, maybe we shouldn't show it unless we want to show "ready"?
+                                                    // Let's show it if value > 0 or animating.
+                                                    if (_countdownController
+                                                                .value >
+                                                            0 ||
+                                                        _countdownController
+                                                            .isAnimating) {
+                                                      return CircularProgressIndicator(
+                                                        value:
+                                                            _countdownController
+                                                                .value,
+                                                        backgroundColor: theme
+                                                            .colorScheme
+                                                            .surfaceContainerHighest,
+                                                      );
+                                                    } else {
+                                                      // If not animating and 0, maybe just a placeholder or empty?
+                                                      // User said "circle disappeared". Maybe it's resetting too fast or not starting?
+                                                      // Let's ensure we show SOMETHING if no summary.
+                                                      return CircularProgressIndicator(
+                                                        value: 0,
+                                                        backgroundColor: theme
+                                                            .colorScheme
+                                                            .surfaceContainerHighest,
+                                                      );
+                                                    }
+                                                  },
+                                                ),
                                               ),
-                                            ))
+                                            )
                                           // Priority 3: Content
                                           else
                                             StreamingTypewriterText(
-                                              key: ValueKey('${settings.selectedSummaryProfileId}_$_displayPageIndex'),
+                                              key: ValueKey(
+                                                '${settings.selectedSummaryProfileId}_$_displayPageIndex',
+                                              ),
                                               text: displaySummary,
-                                              speed: const Duration(milliseconds: 20),
-                                              isStreaming: _isLoading, 
+                                              speed: const Duration(
+                                                milliseconds: 20,
+                                              ),
+                                              isStreaming: _isLoading,
                                             ),
                                         ],
                                       ),
                                     );
-                                  }
+                                  },
                                 ),
                               ),
                             ),
-                            
+
                             // 2.2 Chat History
                             Consumer(
                               builder: (context, ref, _) {
                                 final settings = ref.watch(settingsProvider);
                                 final pageDataAsync = ref.watch(
-                                  watchPageDataProvider(
-                                    (
-                                      bookId: widget.bookId,
-                                      pageIndex: _displayPageIndex,
-                                      profileId: settings.selectedSummaryProfileId,
-                                    ),
-                                  ),
+                                  watchPageDataProvider((
+                                    bookId: widget.bookId,
+                                    pageIndex: _displayPageIndex,
+                                    profileId:
+                                        settings.selectedSummaryProfileId,
+                                  )),
                                 );
                                 final pageData = pageDataAsync.value;
-                                if (pageData == null) return const SliverToBoxAdapter(child: SizedBox.shrink());
+                                if (pageData == null)
+                                  return const SliverToBoxAdapter(
+                                    child: SizedBox.shrink(),
+                                  );
 
                                 return Consumer(
                                   builder: (context, ref, _) {
-                                    final messagesAsync = ref.watch(watchMessagesProvider(pageData.id));
+                                    final messagesAsync = ref.watch(
+                                      watchMessagesProvider(pageData.id),
+                                    );
                                     final messages = messagesAsync.value ?? [];
-                                    
+
                                     if (messages.isNotEmpty) {
-                                       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback(
+                                            (_) => _scrollToBottom(),
+                                          );
                                     }
 
                                     return SliverList(
-                                      delegate: SliverChildBuilderDelegate(
-                                        (context, index) {
-                                          final msg = messages[index];
-                                          final isUser = msg.isUser;
-                                          final isStreaming = !isUser && index == messages.length - 1 && _isLoading;
-                                          
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                            child: Align(
-                                              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                                              child: Container(
-                                                padding: const EdgeInsets.all(12),
-                                                decoration: BoxDecoration(
-                                                  color: isUser ? theme.colorScheme.primaryContainer : theme.colorScheme.surfaceContainerHighest,
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                constraints: BoxConstraints(maxWidth: panelWidth * 0.85),
-                                                child: (msg.text.isEmpty && !isUser) 
+                                      delegate: SliverChildBuilderDelegate((
+                                        context,
+                                        index,
+                                      ) {
+                                        final msg = messages[index];
+                                        final isUser = msg.isUser;
+                                        final isStreaming =
+                                            !isUser &&
+                                            index == messages.length - 1 &&
+                                            _isLoading;
+
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 4,
+                                          ),
+                                          child: Align(
+                                            alignment: isUser
+                                                ? Alignment.centerRight
+                                                : Alignment.centerLeft,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: isUser
+                                                    ? theme
+                                                          .colorScheme
+                                                          .primaryContainer
+                                                    : theme
+                                                          .colorScheme
+                                                          .surfaceContainerHighest,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              constraints: BoxConstraints(
+                                                maxWidth: panelWidth * 0.85,
+                                              ),
+                                              child:
+                                                  (msg.text.isEmpty && !isUser)
                                                   ? const TypingIndicator()
                                                   : StreamingTypewriterText(
                                                       text: msg.text,
                                                       isStreaming: isStreaming,
                                                       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
                                                         p: theme.textTheme.bodyMedium?.copyWith(
-                                                          color: isUser ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurfaceVariant,
-                                                          fontFamily: 'Noto Serif SC', // Ensure Serif font as requested
+                                                          color: isUser
+                                                              ? theme
+                                                                    .colorScheme
+                                                                    .onPrimaryContainer
+                                                              : theme
+                                                                    .colorScheme
+                                                                    .onSurfaceVariant,
+                                                          fontFamily:
+                                                              'Noto Serif SC', // Ensure Serif font as requested
                                                         ),
                                                       ),
                                                     ),
-                                              ),
                                             ),
-                                          );
-                                        },
-                                        childCount: messages.length,
-                                      ),
+                                          ),
+                                        );
+                                      }, childCount: messages.length),
                                     );
-                                  }
+                                  },
                                 );
-                              }
+                              },
                             ),
-                            
+
                             // Bottom padding
                             const SliverToBoxAdapter(child: Gap(16)),
                           ],
@@ -630,41 +777,47 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
                       ),
                     ),
                   ),
-              
+
                   Divider(height: 1, color: theme.colorScheme.outlineVariant),
-              
+
                   // 3. Input Area (Static)
-              Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _chatController,
-                        decoration: InputDecoration(
-                          hintText: l10n.enterMessage,
-                          border: const OutlineInputBorder(),
-                          filled: true,
-                          fillColor: theme.colorScheme.surface,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          isDense: true,
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _chatController,
+                            decoration: InputDecoration(
+                              hintText: l10n.enterMessage,
+                              border: const OutlineInputBorder(),
+                              filled: true,
+                              fillColor: theme.colorScheme.surface,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              isDense: true,
+                            ),
+                            onSubmitted: (value) => _sendMessage(value),
+                          ),
                         ),
-                        onSubmitted: (value) => _sendMessage(value),
-                      ),
+                        const Gap(8),
+                        IconButton.filled(
+                          icon: const Icon(Icons.send),
+                          onPressed: _isLoading
+                              ? null
+                              : () => _sendMessage(_chatController.text),
+                        ),
+                      ],
                     ),
-                    const Gap(8),
-                    IconButton.filled(
-                      icon: const Icon(Icons.send),
-                      onPressed: _isLoading ? null : () => _sendMessage(_chatController.text),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-       )
-      ]), // End Row
+        ],
+      ), // End Row
     ); // End SlideTransition
   }
 
@@ -686,37 +839,44 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     // Check if the current page OR the next page has data
     // If both have NO data, we skip the fade animation and just reset/restart countdown
     // This makes scrolling through empty pages feel faster/more responsive
-    
+
     final repo = ref.read(pageRepositoryProvider);
     final profileId = settings.selectedSummaryProfileId;
-    final currentPageData = repo.getPageData(widget.bookId, _displayPageIndex, profileId);
+    final currentPageData = repo.getPageData(
+      widget.bookId,
+      _displayPageIndex,
+      profileId,
+    );
     final nextPageData = repo.getPageData(widget.bookId, pageIndex, profileId);
-    
-    final currentHasData = currentPageData?.summary != null && currentPageData!.summary!.isNotEmpty;
-    final nextHasData = nextPageData?.summary != null && nextPageData!.summary!.isNotEmpty;
+
+    final currentHasData =
+        currentPageData?.summary != null &&
+        currentPageData!.summary!.isNotEmpty;
+    final nextHasData =
+        nextPageData?.summary != null && nextPageData!.summary!.isNotEmpty;
 
     if (!currentHasData && !nextHasData) {
-       // Both empty: Skip fade animation, just update immediately
-       // This feels like "resetting" the countdown rather than fading content
-       // We pass true to animateReset to show the countdown circle rewinding
-       _updateContentToPage(pageIndex, animateReset: true);
-       return;
+      // Both empty: Skip fade animation, just update immediately
+      // This feels like "resetting" the countdown rather than fading content
+      // We pass true to animateReset to show the countdown circle rewinding
+      _updateContentToPage(pageIndex, animateReset: true);
+      return;
     }
-    
+
     // 2. Trigger Fade Out (Breathing Effect)
     // If content is already fading, just update the target
     _pendingPageIndex = pageIndex;
-    
+
     // Start fade out sequence
     // If controller is at 0 (visible), forward to 1 (hidden)
     if (!_contentTransitionController.isAnimating) {
-       _contentTransitionController.forward(from: 0.0);
+      _contentTransitionController.forward(from: 0.0);
     } else {
-       // Already animating? If fading IN (reverse), stop and fade OUT again?
-       // Or if fading OUT (forward), let it finish.
-       if (_contentTransitionController.status == AnimationStatus.reverse) {
-         _contentTransitionController.forward();
-       }
+      // Already animating? If fading IN (reverse), stop and fade OUT again?
+      // Or if fading OUT (forward), let it finish.
+      if (_contentTransitionController.status == AnimationStatus.reverse) {
+        _contentTransitionController.forward();
+      }
     }
   }
 
@@ -727,10 +887,14 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
       // Small delay to ensure rendering is complete
       await Future.delayed(const Duration(milliseconds: 100));
 
-      RenderRepaintBoundary boundary = widget.pdfKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      RenderRepaintBoundary boundary =
+          widget.pdfKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
       if (byteData != null) {
         return base64Encode(byteData.buffer.asUint8List());
       }
@@ -739,7 +903,7 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     }
     return null;
   }
-  
+
   // Render previous pages for enhanced context (PseudoKB Mode)
   Future<List<String>> _renderContextPages(int pageIndex) async {
     final settings = ref.read(settingsProvider);
@@ -748,24 +912,26 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     final doc = widget.pdfDocument as PdfDocument;
     final contextImages = <String>[];
     final pagesToRender = <int>[];
-    
+
     // Add previous 2 pages if available
     if (pageIndex > 2) pagesToRender.add(pageIndex - 2);
     if (pageIndex > 1) pagesToRender.add(pageIndex - 1);
-    
+
     for (final pNum in pagesToRender) {
       if (pNum > 0 && pNum <= doc.pages.length) {
         try {
           final page = doc.pages[pNum - 1];
           final image = await page.render(
-            width: 768, 
+            width: 768,
             height: (768 * page.height / page.width).round(),
             backgroundColor: 0xFFFFFFFF,
           );
-          
+
           if (image != null) {
             final uiImage = await image.createImage();
-            final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+            final byteData = await uiImage.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
             if (byteData != null) {
               contextImages.add(base64Encode(byteData.buffer.asUint8List()));
             }
@@ -780,11 +946,11 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
 
   // This local generation is only for manual refresh now, or fallback?
   // Actually, we moved auto-generation to service.
-  // Manual refresh should also use the service? 
+  // Manual refresh should also use the service?
   // If we want to show progress in UI, we can keep using service but we need to know when it finishes.
   // But service is "fire and forget" or "wait".
   // Let's make _refreshSummary use the service too.
-  
+
   Future<void> _refreshSummary(int pageIndex) async {
     _countdownController.stop();
     setState(() {
@@ -792,19 +958,23 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     });
     final settings = ref.read(settingsProvider);
     final profileId = settings.selectedSummaryProfileId;
-    
+
     if (widget.pdfDocument != null) {
-      ref.read(pageRepositoryProvider).savePageSummary(widget.bookId, pageIndex, profileId, "", null);
-      
-      await ref.read(summaryGenerationServiceProvider).ensureSummary(
-        widget.bookId, 
-        pageIndex, 
-        profileId,
-        widget.pdfDocument,
-        locale: Localizations.localeOf(context).languageCode,
-      );
+      ref
+          .read(pageRepositoryProvider)
+          .savePageSummary(widget.bookId, pageIndex, profileId, "", null);
+
+      await ref
+          .read(summaryGenerationServiceProvider)
+          .ensureSummary(
+            widget.bookId,
+            pageIndex,
+            profileId,
+            widget.pdfDocument,
+            locale: Localizations.localeOf(context).languageCode,
+          );
     }
-    
+
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -814,25 +984,25 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
-    
+
     final pageIndex = ref.read(currentPageProvider);
     final repo = ref.read(pageRepositoryProvider);
     final profileId = ref.read(settingsProvider).selectedSummaryProfileId;
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toString();
-    
+
     // Ensure PageData exists
     var pageData = repo.getPageData(widget.bookId, pageIndex, profileId);
     if (pageData == null) {
-       repo.savePageSummary(widget.bookId, pageIndex, profileId, "", null);
-       pageData = repo.getPageData(widget.bookId, pageIndex, profileId);
+      repo.savePageSummary(widget.bookId, pageIndex, profileId, "", null);
+      pageData = repo.getPageData(widget.bookId, pageIndex, profileId);
     }
-    
+
     if (pageData == null) return;
-    
+
     repo.addMessage(pageData.id, text, true);
     _chatController.clear();
-    
+
     // Cancel previous AI action
     _aiSubscription?.cancel();
 
@@ -845,7 +1015,7 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-    
+
     // Get context pages if enabled
     final contextImages = await _renderContextPages(pageIndex);
     // Combine context + current page (screenshot)
@@ -854,7 +1024,7 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
     final history = repo.getRecentMessages(pageData.id);
     final aiService = ref.read(aiServiceProvider);
     final StringBuffer responseBuffer = StringBuffer();
-    
+
     // Add temporary AI loading message
     final loadingMsgId = repo.addMessage(pageData.id, "", false);
 
@@ -884,19 +1054,18 @@ class _AiPanelState extends ConsumerState<AiPanel> with TickerProviderStateMixin
         },
         cancelOnError: true,
       );
-
     } catch (e) {
       if (mounted) {
-          repo.updateMessage(loadingMsgId, "${l10n.errorPrefix}$e");
-          setState(() => _isLoading = false);
+        repo.updateMessage(loadingMsgId, "${l10n.errorPrefix}$e");
+        setState(() => _isLoading = false);
       }
     }
   }
 
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Copied to clipboard')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
   }
 }

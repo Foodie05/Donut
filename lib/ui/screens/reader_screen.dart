@@ -39,6 +39,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late final BookRepository _bookRepository;
 
   PdfDocument? _document;
+  Future<String>? _resolvedPdfPathFuture;
+  String? _resolvedForBookPath;
 
   @override
   void initState() {
@@ -286,49 +288,77 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   children: [
                     RepaintBoundary(
                       key: _pdfKey,
-                      child: PdfViewer.file(
-                        book.filePath,
-                        controller: _pdfController,
-                        initialPageNumber: book.lastReadPage > 0 ? book.lastReadPage : 1,
-                        params: PdfViewerParams(
-                          layoutPages: settings.readingDirection == ReadingDirection.vertical
-                            ? null // Use default vertical layout
-                            : (pages, params) {
-                                // Simple horizontal layout
-                                double x = 0;
-                                final pageLayouts = <Rect>[];
-                                for (var page in pages) {
-                                  final rect = Rect.fromLTWH(
-                                    x,
-                                    0,
-                                    page.width,
-                                    page.height,
-                                  );
-                                  pageLayouts.add(rect);
-                                  x += page.width;
+                      child: Builder(
+                        builder: (context) {
+                          if (_resolvedForBookPath != book.filePath ||
+                              _resolvedPdfPathFuture == null) {
+                            _resolvedForBookPath = book.filePath;
+                            _resolvedPdfPathFuture =
+                                _bookRepository.ensureReadablePdfPath(book);
+                          }
+
+                          return FutureBuilder<String>(
+                            future: _resolvedPdfPathFuture,
+                            builder: (context, snapshot) {
+                              final resolvedPath = snapshot.data;
+                              if (resolvedPath == null) {
+                                if (snapshot.hasError) {
+                                  return const Center(child: Text('Failed to load PDF'));
                                 }
-                                return PdfPageLayout(
-                                  pageLayouts: pageLayouts,
-                                  documentSize: Size(x, pages.isEmpty ? 0 : pages[0].height),
-                                );
-                              },
-                          onPageChanged: (page) {
-                            ref.read(currentPageProvider.notifier).setPage(page ?? 1);
-                            ref.read(bookRepositoryProvider).updateLastReadPage(widget.bookId, page ?? 1);
-                          },
-                          onViewerReady: (document, controller) {
-                            if (mounted) {
-                              setState(() {
-                                _document = document;
-                                // Mark PDF as ready to load sidebars
-                                _isPdfReady = true;
-                              });
-                            }
-                          },
-                          // Pass controller to AI Panel via some mechanism?
-                          // AiPanel is built in the same tree, so it can access _document if we pass it.
-                          // But AiPanel is built below.
-                        ),
+                                return const Center(child: CircularProgressIndicator());
+                              }
+
+                              return PdfViewer.file(
+                                resolvedPath,
+                                controller: _pdfController,
+                                initialPageNumber: book.lastReadPage > 0
+                                    ? book.lastReadPage
+                                    : 1,
+                                params: PdfViewerParams(
+                                  layoutPages:
+                                      settings.readingDirection ==
+                                              ReadingDirection.vertical
+                                          ? null
+                                          : (pages, params) {
+                                              double x = 0;
+                                              final pageLayouts = <Rect>[];
+                                              for (var page in pages) {
+                                                final rect = Rect.fromLTWH(
+                                                  x,
+                                                  0,
+                                                  page.width,
+                                                  page.height,
+                                                );
+                                                pageLayouts.add(rect);
+                                                x += page.width;
+                                              }
+                                              return PdfPageLayout(
+                                                pageLayouts: pageLayouts,
+                                                documentSize: Size(
+                                                  x,
+                                                  pages.isEmpty ? 0 : pages[0].height,
+                                                ),
+                                              );
+                                            },
+                                  onPageChanged: (page) {
+                                    ref.read(currentPageProvider.notifier).setPage(page ?? 1);
+                                    ref
+                                        .read(bookRepositoryProvider)
+                                        .updateLastReadPage(widget.bookId, page ?? 1);
+                                  },
+                                  onViewerReady: (document, controller) {
+                                    if (mounted) {
+                                      setState(() {
+                                        _document = document;
+                                        _isPdfReady = true;
+                                      });
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
                     ),
                     // Page Indicator (Bottom)

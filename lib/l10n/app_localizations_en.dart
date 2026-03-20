@@ -121,13 +121,66 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiConfiguration => 'AI Configuration';
 
   @override
+  String get aiCategorySubtitle => 'Configure model, endpoint, API key, and reply length';
+
+  @override
   String get apiBaseUrl => 'API Base URL';
+
+  @override
+  String get modelReplyLength => 'Model Reply Length';
+
+  @override
+  String get modelReplyLengthSubtitle => 'Set a response cap to save tokens, but the result may be incomplete.';
+
+  @override
+  String get modelReplyLengthShort => 'Short';
+
+  @override
+  String get modelReplyLengthMedium => 'Medium';
+
+  @override
+  String get modelReplyLengthLong => 'Long';
+
+  @override
+  String get modelReplyLengthUnlimited => 'Unlimited';
 
   @override
   String get deleteBook => 'Delete Book';
 
   @override
   String get resetAiData => 'Reset AI Data';
+
+  @override
+  String get deleteBookWarning => 'Deleting will remove this book file, cover, and related AI data. This action cannot be undone.';
+
+  @override
+  String get resetAiDataWarning => 'Resetting will clear all summaries and chat records for this book. This action cannot be undone.';
+
+  @override
+  String get resetAiDataDone => 'AI data for this book has been reset';
+
+  @override
+  String get exportBookFile => 'Export File';
+
+  @override
+  String get exportFormatPdfSubtitle => 'Read this book in any PDF software';
+
+  @override
+  String get exportFormatDpdfSubtitle => 'Share your AI content and chat history with others';
+
+  @override
+  String get exportBookFileSuccess => 'Export completed';
+
+  @override
+  String get exportBookFileFailed => 'Export failed. Please check write permission at destination.';
+
+  @override
+  String get duplicateBookTitle => 'Duplicate Book';
+
+  @override
+  String duplicateBookMessage(Object title) {
+    return 'This book appears to be the same as \"$title\" (same file hash). Import again anyway?';
+  }
 
   @override
   String get statistics => 'Statistics';
@@ -233,4 +286,144 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get multiPageContext => 'Multi-page Context Active';
+
+  @override
+  String get dataAndLegal => 'Data & Legal';
+
+  @override
+  String get readerCategorySubtitle => 'Manage summaries, context options, and reading assists';
+
+  @override
+  String get appearanceCategorySubtitle => 'Adjust theme and reading direction display';
+
+  @override
+  String get dataLegalCategorySubtitle => 'Import/export settings and review legal/open-source docs';
+
+  @override
+  String get importSettings => 'Import Settings';
+
+  @override
+  String get importSettingsSubtitle => 'Import configurable options from a JSON file';
+
+  @override
+  String get exportSettings => 'Export Settings';
+
+  @override
+  String get exportSettingsSubtitle => 'Export current settings to a JSON file';
+
+  @override
+  String get settingsHistory => 'Settings History';
+
+  @override
+  String get settingsHistorySubtitle => 'View recent 10 snapshots and roll back quickly';
+
+  @override
+  String get settingsHistoryEmpty => 'No history snapshots yet';
+
+  @override
+  String get settingsHistoryRestoreSuccess => 'Settings restored from history';
+
+  @override
+  String get settingsHistoryRestoreFailed => 'Restore failed. Please verify the snapshot file.';
+
+  @override
+  String get pickSettingsJson => 'Pick settings JSON file';
+
+  @override
+  String get saveSettingsJson => 'Save settings JSON file';
+
+  @override
+  String get importSettingsSuccess => 'Settings imported successfully';
+
+  @override
+  String get importSettingsInvalidJson => 'Import failed: invalid JSON format';
+
+  @override
+  String get importSettingsInvalidStructure => 'Import failed: invalid configuration structure';
+
+  @override
+  String get importSettingsIoError => 'Import failed: unable to read file';
+
+  @override
+  String get exportSettingsSuccess => 'Settings exported successfully';
+
+  @override
+  String get exportSettingsIoError => 'Export failed: unable to write file';
+
+  @override
+  String get exportDebugLogs => 'Extract Debug Logs';
+
+  @override
+  String get exportDebugLogsSubtitle => 'Export file-open/import trace logs for troubleshooting';
+
+  @override
+  String get saveDebugLog => 'Save debug log';
+
+  @override
+  String get exportDebugLogsSuccess => 'Debug logs exported successfully';
+
+  @override
+  String get exportDebugLogsFailed => 'Failed to export debug logs';
+
+  @override
+  String get termsOfService => 'Donut Terms of Service';
+
+  @override
+  String get termsOfServiceSubtitle => 'View the full Donut Terms of Service';
+
+  @override
+  String get privacyPolicy => 'Privacy Policy';
+
+  @override
+  String get privacyPolicySubtitle => 'View the full Donut Privacy Policy';
+
+  @override
+  String get openSourceLicenses => 'Open Source Licenses';
+
+  @override
+  String get openSourceLicensesSubtitle => 'View third-party open source licenses used by this app';
+
+  @override
+  String get welcomeTitle => 'Welcome to Donut!';
+
+  @override
+  String get welcomeMessageLine1 => 'Read your PDFs with ease and discover insights and inspiration.';
+
+  @override
+  String get welcomeMessageLine2 => 'Chat with models and unlock new ideas.';
+
+  @override
+  String get welcomeMessageLine3 => 'Please read and agree to the Terms and Privacy Policy first.';
+
+  @override
+  String currentVersionBeta(Object version) {
+    return 'Current version: $version beta';
+  }
+
+  @override
+  String get agreementCheckboxLabel => 'I have read and agree to the Donut Terms of Service and Privacy Policy';
+
+  @override
+  String get viewTermsOfService => 'View Terms of Service';
+
+  @override
+  String get viewPrivacyPolicy => 'View Privacy Policy';
+
+  @override
+  String get agreementRequiredTitle => 'Agreement Required';
+
+  @override
+  String get agreementRequiredBody => 'Please review and agree to the Terms and Privacy Policy to continue using Donut.';
+
+  @override
+  String get releaseNotesTitle => 'Release Notes';
+
+  @override
+  String get noReleaseNotes => 'No release notes available.';
+
+  @override
+  String get confirm => 'Confirm';
+
+  @override
+  String get restore => 'Restore';
 }

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "notes": [
+    {
+      "versionCode": 1,
+      "versionName": "1.0.0+1",
+      "zhMarkdown": "- 首次发布：支持 PDF 阅读、书架管理与页面导航。\n- 支持 AI 页面摘要与对话模式。\n- 支持阅读统计与主题设置。",
+      "enMarkdown": "- Initial release with PDF reading, bookshelf management, and page navigation.\n- Added AI page summary and chat modes.\n- Added reading stats and theme settings."
+    },
+    {
+      "versionCode": 2,
+      "versionName": "1.1.0+2",
+      "zhMarkdown": "- 新增摘要配置文件管理与模型回复长度设置。\n- 新增设置 JSON 备份、导入与导出能力。\n- 新增首次欢迎引导、条款同意流程和更新日志弹窗。",
+      "enMarkdown": "- Added summary profile management and model reply length settings.\n- Added settings JSON backup, import, and export support.\n- Added first-run onboarding, legal consent flow, and release notes dialog."
+    }
+  ]
+}

@@ -8,7 +8,7 @@ import 'package:pdf_reader/services/settings_service.dart';
 import 'package:pdf_reader/ui/screens/settings_screen.dart';
 
 void main() {
-  testWidgets('Settings screen shows theme and summary options', (WidgetTester tester) async {
+  testWidgets('Settings screen groups settings into sub menus', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
 
@@ -30,16 +30,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('AI Configuration'), findsOneWidget);
     expect(find.text('Reader'), findsOneWidget);
-    expect(find.text('Summary Profiles'), findsOneWidget);
-    expect(find.text('Smooth Summary'), findsOneWidget);
-    expect(find.text('Power Saving Mode'), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Data & Legal'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('Theme Mode'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.tap(find.text('AI Configuration'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Model Reply Length'), findsOneWidget);
+    expect(find.text('Unlimited'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
 
     expect(find.text('Theme Mode'), findsOneWidget);

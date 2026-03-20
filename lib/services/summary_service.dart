@@ -18,6 +18,9 @@ SummaryGenerationService summaryGenerationService(Ref ref) {
 }
 
 class SummaryGenerationService {
+  static const int _targetRenderWidth = 2000;
+  static const int _maxRenderHeight = 3200;
+
   final Ref _ref;
   // Track in-flight requests: bookId_pageIndex_profileId -> Future
   final Map<String, Future<void>> _pendingRequests = {};
@@ -94,9 +97,17 @@ class SummaryGenerationService {
           final page = doc.pages[pNum - 1];
           // Use smaller scale/size for context pages if needed, but for simplicity use consistent size
           // Compress logic: Use jpeg with 80% quality or resize
+          var renderWidth = _targetRenderWidth;
+          var renderHeight = (renderWidth * page.height / page.width).round();
+          if (renderHeight > _maxRenderHeight) {
+            final scale = _maxRenderHeight / renderHeight;
+            renderHeight = _maxRenderHeight;
+            renderWidth = (renderWidth * scale).round();
+          }
+
           final image = await page.render(
-            width: 768, // Reasonable width for AI analysis
-            height: (768 * page.height / page.width).round(),
+            width: renderWidth,
+            height: renderHeight,
             backgroundColor: 0xFFFFFFFF,
           );
           

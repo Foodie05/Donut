@@ -8,7 +8,7 @@
 PRODUCT_NAME = Donut
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.donut
+PRODUCT_BUNDLE_IDENTIFIER = com.cruty.donut
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example.donut. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.cruty.donut. All rights reserved.

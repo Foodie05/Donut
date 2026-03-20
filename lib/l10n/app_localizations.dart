@@ -311,11 +311,53 @@ abstract class AppLocalizations {
   /// **'AI Configuration'**
   String get aiConfiguration;
 
+  /// No description provided for @aiCategorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure model, endpoint, API key, and reply length'**
+  String get aiCategorySubtitle;
+
   /// No description provided for @apiBaseUrl.
   ///
   /// In en, this message translates to:
   /// **'API Base URL'**
   String get apiBaseUrl;
+
+  /// No description provided for @modelReplyLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Model Reply Length'**
+  String get modelReplyLength;
+
+  /// No description provided for @modelReplyLengthSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a response cap to save tokens, but the result may be incomplete.'**
+  String get modelReplyLengthSubtitle;
+
+  /// No description provided for @modelReplyLengthShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Short'**
+  String get modelReplyLengthShort;
+
+  /// No description provided for @modelReplyLengthMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get modelReplyLengthMedium;
+
+  /// No description provided for @modelReplyLengthLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Long'**
+  String get modelReplyLengthLong;
+
+  /// No description provided for @modelReplyLengthUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited'**
+  String get modelReplyLengthUnlimited;
 
   /// No description provided for @deleteBook.
   ///
@@ -328,6 +370,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reset AI Data'**
   String get resetAiData;
+
+  /// No description provided for @deleteBookWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting will remove this book file, cover, and related AI data. This action cannot be undone.'**
+  String get deleteBookWarning;
+
+  /// No description provided for @resetAiDataWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Resetting will clear all summaries and chat records for this book. This action cannot be undone.'**
+  String get resetAiDataWarning;
+
+  /// No description provided for @resetAiDataDone.
+  ///
+  /// In en, this message translates to:
+  /// **'AI data for this book has been reset'**
+  String get resetAiDataDone;
+
+  /// No description provided for @exportBookFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Export File'**
+  String get exportBookFile;
+
+  /// No description provided for @exportFormatPdfSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Read this book in any PDF software'**
+  String get exportFormatPdfSubtitle;
+
+  /// No description provided for @exportFormatDpdfSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share your AI content and chat history with others'**
+  String get exportFormatDpdfSubtitle;
+
+  /// No description provided for @exportBookFileSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Export completed'**
+  String get exportBookFileSuccess;
+
+  /// No description provided for @exportBookFileFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed. Please check write permission at destination.'**
+  String get exportBookFileFailed;
+
+  /// No description provided for @duplicateBookTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate Book'**
+  String get duplicateBookTitle;
+
+  /// No description provided for @duplicateBookMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This book appears to be the same as \"{title}\" (same file hash). Import again anyway?'**
+  String duplicateBookMessage(Object title);
 
   /// No description provided for @statistics.
   ///
@@ -538,6 +640,282 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Multi-page Context Active'**
   String get multiPageContext;
+
+  /// No description provided for @dataAndLegal.
+  ///
+  /// In en, this message translates to:
+  /// **'Data & Legal'**
+  String get dataAndLegal;
+
+  /// No description provided for @readerCategorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage summaries, context options, and reading assists'**
+  String get readerCategorySubtitle;
+
+  /// No description provided for @appearanceCategorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust theme and reading direction display'**
+  String get appearanceCategorySubtitle;
+
+  /// No description provided for @dataLegalCategorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import/export settings and review legal/open-source docs'**
+  String get dataLegalCategorySubtitle;
+
+  /// No description provided for @importSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Import Settings'**
+  String get importSettings;
+
+  /// No description provided for @importSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import configurable options from a JSON file'**
+  String get importSettingsSubtitle;
+
+  /// No description provided for @exportSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Export Settings'**
+  String get exportSettings;
+
+  /// No description provided for @exportSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export current settings to a JSON file'**
+  String get exportSettingsSubtitle;
+
+  /// No description provided for @settingsHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings History'**
+  String get settingsHistory;
+
+  /// No description provided for @settingsHistorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View recent 10 snapshots and roll back quickly'**
+  String get settingsHistorySubtitle;
+
+  /// No description provided for @settingsHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No history snapshots yet'**
+  String get settingsHistoryEmpty;
+
+  /// No description provided for @settingsHistoryRestoreSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings restored from history'**
+  String get settingsHistoryRestoreSuccess;
+
+  /// No description provided for @settingsHistoryRestoreFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore failed. Please verify the snapshot file.'**
+  String get settingsHistoryRestoreFailed;
+
+  /// No description provided for @pickSettingsJson.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick settings JSON file'**
+  String get pickSettingsJson;
+
+  /// No description provided for @saveSettingsJson.
+  ///
+  /// In en, this message translates to:
+  /// **'Save settings JSON file'**
+  String get saveSettingsJson;
+
+  /// No description provided for @importSettingsSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings imported successfully'**
+  String get importSettingsSuccess;
+
+  /// No description provided for @importSettingsInvalidJson.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: invalid JSON format'**
+  String get importSettingsInvalidJson;
+
+  /// No description provided for @importSettingsInvalidStructure.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: invalid configuration structure'**
+  String get importSettingsInvalidStructure;
+
+  /// No description provided for @importSettingsIoError.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: unable to read file'**
+  String get importSettingsIoError;
+
+  /// No description provided for @exportSettingsSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings exported successfully'**
+  String get exportSettingsSuccess;
+
+  /// No description provided for @exportSettingsIoError.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed: unable to write file'**
+  String get exportSettingsIoError;
+
+  /// No description provided for @exportDebugLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract Debug Logs'**
+  String get exportDebugLogs;
+
+  /// No description provided for @exportDebugLogsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export file-open/import trace logs for troubleshooting'**
+  String get exportDebugLogsSubtitle;
+
+  /// No description provided for @saveDebugLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Save debug log'**
+  String get saveDebugLog;
+
+  /// No description provided for @exportDebugLogsSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug logs exported successfully'**
+  String get exportDebugLogsSuccess;
+
+  /// No description provided for @exportDebugLogsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to export debug logs'**
+  String get exportDebugLogsFailed;
+
+  /// No description provided for @termsOfService.
+  ///
+  /// In en, this message translates to:
+  /// **'Donut Terms of Service'**
+  String get termsOfService;
+
+  /// No description provided for @termsOfServiceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View the full Donut Terms of Service'**
+  String get termsOfServiceSubtitle;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get privacyPolicy;
+
+  /// No description provided for @privacyPolicySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View the full Donut Privacy Policy'**
+  String get privacyPolicySubtitle;
+
+  /// No description provided for @openSourceLicenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Source Licenses'**
+  String get openSourceLicenses;
+
+  /// No description provided for @openSourceLicensesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View third-party open source licenses used by this app'**
+  String get openSourceLicensesSubtitle;
+
+  /// No description provided for @welcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to Donut!'**
+  String get welcomeTitle;
+
+  /// No description provided for @welcomeMessageLine1.
+  ///
+  /// In en, this message translates to:
+  /// **'Read your PDFs with ease and discover insights and inspiration.'**
+  String get welcomeMessageLine1;
+
+  /// No description provided for @welcomeMessageLine2.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat with models and unlock new ideas.'**
+  String get welcomeMessageLine2;
+
+  /// No description provided for @welcomeMessageLine3.
+  ///
+  /// In en, this message translates to:
+  /// **'Please read and agree to the Terms and Privacy Policy first.'**
+  String get welcomeMessageLine3;
+
+  /// No description provided for @currentVersionBeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Current version: {version} beta'**
+  String currentVersionBeta(Object version);
+
+  /// No description provided for @agreementCheckboxLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to the Donut Terms of Service and Privacy Policy'**
+  String get agreementCheckboxLabel;
+
+  /// No description provided for @viewTermsOfService.
+  ///
+  /// In en, this message translates to:
+  /// **'View Terms of Service'**
+  String get viewTermsOfService;
+
+  /// No description provided for @viewPrivacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'View Privacy Policy'**
+  String get viewPrivacyPolicy;
+
+  /// No description provided for @agreementRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Agreement Required'**
+  String get agreementRequiredTitle;
+
+  /// No description provided for @agreementRequiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Please review and agree to the Terms and Privacy Policy to continue using Donut.'**
+  String get agreementRequiredBody;
+
+  /// No description provided for @releaseNotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Release Notes'**
+  String get releaseNotesTitle;
+
+  /// No description provided for @noReleaseNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'No release notes available.'**
+  String get noReleaseNotes;
+
+  /// No description provided for @confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get confirm;
+
+  /// No description provided for @restore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get restore;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

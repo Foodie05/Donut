@@ -6,6 +6,8 @@ PODS:
   - objectbox_flutter_libs (0.0.1):
     - FlutterMacOS
     - ObjectBox (= 5.2.0)
+  - package_info_plus (0.0.1):
+    - FlutterMacOS
   - pdfium_flutter (0.1.5):
     - Flutter
     - FlutterMacOS
@@ -21,6 +23,7 @@ DEPENDENCIES:
   - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - objectbox_flutter_libs (from `Flutter/ephemeral/.symlinks/plugins/objectbox_flutter_libs/macos`)
+  - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - pdfium_flutter (from `Flutter/ephemeral/.symlinks/plugins/pdfium_flutter/darwin`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
   - shared_preferences_foundation (from `Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -37,6 +40,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
   objectbox_flutter_libs:
     :path: Flutter/ephemeral/.symlinks/plugins/objectbox_flutter_libs/macos
+  package_info_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
   pdfium_flutter:
     :path: Flutter/ephemeral/.symlinks/plugins/pdfium_flutter/darwin
   share_plus:
@@ -51,6 +56,7 @@ SPEC CHECKSUMS:
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   ObjectBox: 946c1e8586aaa61e21b6661bab4948d06fdd51c4
   objectbox_flutter_libs: 52ffb4ad42870c47886c2c6a7528e76b770af6d9
+  package_info_plus: f0052d280d17aa382b932f399edf32507174e870
   pdfium_flutter: 512bc19dbbd80b4287d04869aa19ad729289079d
   share_plus: 510bf0af1a42cd602274b4629920c9649c52f4cc
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
