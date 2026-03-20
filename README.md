@@ -17,6 +17,11 @@ flutter run
 
 ```bash
 cd donut_backend
+export DONUT_UPSTREAM_API_KEY="sk-your-real-provider-key"
 dart pub get
 dart_frog dev
 ```
+
+Use `DONUT_UPSTREAM_BASE_URL` if you want to target a non-OpenAI compatible
+provider base URL, and `DONUT_CLIENT_API_KEY` to control the app-facing bearer
+key accepted by the Donut gateway.
