@@ -15,7 +15,9 @@ SharedPreferences sharedPreferences(Ref ref) {
 }
 
 enum ReadingDirection { vertical, horizontal }
+
 enum AppThemeMode { system, light, dark }
+
 enum ModelReplyLength {
   short(1000),
   medium(3500),
@@ -27,11 +29,7 @@ enum ModelReplyLength {
   final int? maxTokens;
 }
 
-enum SettingsImportError {
-  invalidJson,
-  invalidStructure,
-  io,
-}
+enum SettingsImportError { invalidJson, invalidStructure, io }
 
 class SettingsImportResult {
   final bool success;
@@ -42,7 +40,7 @@ class SettingsImportResult {
   const SettingsImportResult.success() : this._(true, null);
 
   const SettingsImportResult.failure(SettingsImportError error)
-      : this._(false, error);
+    : this._(false, error);
 }
 
 class SettingsBackupEntry {
@@ -56,6 +54,19 @@ class SettingsBackupEntry {
     required this.modifiedAt,
   });
 }
+
+const defaultGatewayBaseUrl = String.fromEnvironment(
+  'DONUT_API_BASE_URL',
+  defaultValue: 'http://127.0.0.1:8080/v1',
+);
+const defaultGatewayApiKey = String.fromEnvironment(
+  'DONUT_API_KEY',
+  defaultValue: 'donut-local-client-key',
+);
+const defaultGatewayModelName = String.fromEnvironment(
+  'DONUT_DEFAULT_MODEL',
+  defaultValue: 'gpt-4o',
+);
 
 const String defaultSummaryProfileId = 'default_summary';
 const String defaultSummaryPrompt =
@@ -142,7 +153,9 @@ Future<File> _resolveSettingsBackupFile() async {
 
 Future<Directory> _resolveSettingsHistoryDirectory() async {
   final supportDir = await getApplicationSupportDirectory();
-  final historyDir = Directory(path.join(supportDir.path, _settingsHistoryDirName));
+  final historyDir = Directory(
+    path.join(supportDir.path, _settingsHistoryDirName),
+  );
   await historyDir.create(recursive: true);
   return historyDir;
 }
@@ -275,12 +288,7 @@ List<SummaryProfile> _parseCustomProfiles(dynamic value) {
       continue;
     }
     profiles.add(
-      SummaryProfile(
-        id: id,
-        name: name,
-        prompt: prompt,
-        isBuiltIn: false,
-      ),
+      SummaryProfile(id: id, name: name, prompt: prompt, isBuiltIn: false),
     );
   }
   return profiles;
@@ -302,9 +310,9 @@ SettingsModel _settingsFromConfig(Map<String, dynamic> config) {
       : defaultSummaryProfileId;
 
   return SettingsModel(
-    apiKey: _stringValue(config['apiKey'], ''),
-    baseUrl: _stringValue(config['baseUrl'], ''),
-    modelName: _stringValue(config['modelName'], 'gpt-4-vision-preview'),
+    apiKey: _stringValue(config['apiKey'], defaultGatewayApiKey),
+    baseUrl: _stringValue(config['baseUrl'], defaultGatewayBaseUrl),
+    modelName: _stringValue(config['modelName'], defaultGatewayModelName),
     autoGenerate: _boolValue(config['autoGenerate'], true),
     enablePseudoKBMode: _boolValue(config['enablePseudoKBMode'], false),
     smoothSummary: _boolValue(config['smoothSummary'], true),
@@ -312,7 +320,9 @@ SettingsModel _settingsFromConfig(Map<String, dynamic> config) {
     debounceSeconds: _intValue(config['debounceSeconds'], 3),
     readingDirection: _enumFromName(
       ReadingDirection.values,
-      config['readingDirection'] is String ? config['readingDirection'] as String : null,
+      config['readingDirection'] is String
+          ? config['readingDirection'] as String
+          : null,
       ReadingDirection.vertical,
     ),
     themeMode: _enumFromName(
@@ -322,7 +332,9 @@ SettingsModel _settingsFromConfig(Map<String, dynamic> config) {
     ),
     modelReplyLength: _enumFromName(
       ModelReplyLength.values,
-      config['modelReplyLength'] is String ? config['modelReplyLength'] as String : null,
+      config['modelReplyLength'] is String
+          ? config['modelReplyLength'] as String
+          : null,
       ModelReplyLength.unlimited,
     ),
     summaryProfiles: profiles,
@@ -331,8 +343,9 @@ SettingsModel _settingsFromConfig(Map<String, dynamic> config) {
 }
 
 Map<String, dynamic> _settingsToConfig(SettingsModel model) {
-  final customProfiles =
-      model.summaryProfiles.where((profile) => !profile.isBuiltIn).toList();
+  final customProfiles = model.summaryProfiles
+      .where((profile) => !profile.isBuiltIn)
+      .toList();
   return {
     'apiKey': model.apiKey,
     'baseUrl': model.baseUrl,
@@ -345,8 +358,9 @@ Map<String, dynamic> _settingsToConfig(SettingsModel model) {
     'readingDirection': model.readingDirection.name,
     'themeMode': model.themeMode.name,
     'modelReplyLength': model.modelReplyLength.name,
-    'summaryProfiles':
-        customProfiles.map((profile) => profile.toJson()).toList(),
+    'summaryProfiles': customProfiles
+        .map((profile) => profile.toJson())
+        .toList(),
     'selectedSummaryProfileId': model.selectedSummaryProfileId,
   };
 }
@@ -364,9 +378,9 @@ SettingsModel _settingsFromPrefs(SharedPreferences prefs) {
   }
 
   final config = <String, dynamic>{
-    'apiKey': prefs.getString(_prefApiKey) ?? '',
-    'baseUrl': prefs.getString(_prefBaseUrl) ?? '',
-    'modelName': prefs.getString(_prefModelName) ?? 'gpt-4-vision-preview',
+    'apiKey': prefs.getString(_prefApiKey) ?? defaultGatewayApiKey,
+    'baseUrl': prefs.getString(_prefBaseUrl) ?? defaultGatewayBaseUrl,
+    'modelName': prefs.getString(_prefModelName) ?? defaultGatewayModelName,
     'autoGenerate': prefs.getBool(_prefAutoGenerate) ?? true,
     'enablePseudoKBMode': prefs.getBool(_prefEnablePseudoKBMode) ?? false,
     'smoothSummary': prefs.getBool(_prefSmoothSummary) ?? true,
@@ -375,11 +389,10 @@ SettingsModel _settingsFromPrefs(SharedPreferences prefs) {
     'readingDirection':
         ReadingDirection.values[prefs.getInt(_prefReadingDirection) ?? 0].name,
     'themeMode': AppThemeMode.values[prefs.getInt(_prefThemeMode) ?? 0].name,
-    'modelReplyLength':
-        ModelReplyLength.values[
-          prefs.getInt(_prefModelReplyLength) ??
-              ModelReplyLength.unlimited.index
-        ].name,
+    'modelReplyLength': ModelReplyLength
+        .values[prefs.getInt(_prefModelReplyLength) ??
+            ModelReplyLength.unlimited.index]
+        .name,
     'summaryProfiles': customProfiles.map((item) => item.toJson()).toList(),
     'selectedSummaryProfileId':
         prefs.getString(_prefSelectedSummaryProfileId) ??
@@ -405,10 +418,14 @@ void _writeModelToPrefs(SharedPreferences prefs, SettingsModel model) {
   prefs.setInt(_prefReadingDirection, model.readingDirection.index);
   prefs.setInt(_prefThemeMode, model.themeMode.index);
   prefs.setInt(_prefModelReplyLength, model.modelReplyLength.index);
-  prefs.setString(_prefSelectedSummaryProfileId, model.selectedSummaryProfileId);
+  prefs.setString(
+    _prefSelectedSummaryProfileId,
+    model.selectedSummaryProfileId,
+  );
 
-  final customProfiles =
-      model.summaryProfiles.where((profile) => !profile.isBuiltIn).toList();
+  final customProfiles = model.summaryProfiles
+      .where((profile) => !profile.isBuiltIn)
+      .toList();
   prefs.setString(
     _prefSummaryProfiles,
     jsonEncode(customProfiles.map((item) => item.toJson()).toList()),
@@ -464,12 +481,7 @@ class SummaryProfile {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'prompt': prompt,
-      'isBuiltIn': isBuiltIn,
-    };
+    return {'id': id, 'name': name, 'prompt': prompt, 'isBuiltIn': isBuiltIn};
   }
 
   SummaryProfile copyWith({
@@ -508,12 +520,15 @@ class Settings extends _$Settings {
     final snapshotFile = File(path.join(historyDir.path, snapshotName));
     await snapshotFile.writeAsString(content);
 
-    final files = historyDir
-        .listSync()
-        .whereType<File>()
-        .where((item) => item.path.toLowerCase().endsWith('.json'))
-        .toList()
-      ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    final files =
+        historyDir
+            .listSync()
+            .whereType<File>()
+            .where((item) => item.path.toLowerCase().endsWith('.json'))
+            .toList()
+          ..sort(
+            (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
+          );
 
     if (files.length > _settingsHistoryLimit) {
       for (final stale in files.skip(_settingsHistoryLimit)) {
@@ -556,7 +571,9 @@ class Settings extends _$Settings {
     try {
       config = _parseSettingsPayload(raw);
     } catch (_) {
-      return const SettingsImportResult.failure(SettingsImportError.invalidJson);
+      return const SettingsImportResult.failure(
+        SettingsImportError.invalidJson,
+      );
     }
     if (config == null) {
       return const SettingsImportResult.failure(
@@ -583,7 +600,9 @@ class Settings extends _$Settings {
       final raw = await file.readAsString();
       return importSettingsFromJsonString(raw);
     } on FormatException {
-      return const SettingsImportResult.failure(SettingsImportError.invalidJson);
+      return const SettingsImportResult.failure(
+        SettingsImportError.invalidJson,
+      );
     } catch (_) {
       return const SettingsImportResult.failure(SettingsImportError.io);
     }
@@ -594,12 +613,15 @@ class Settings extends _$Settings {
   }) async {
     try {
       final historyDir = await _resolveSettingsHistoryDirectory();
-      final files = historyDir
-          .listSync()
-          .whereType<File>()
-          .where((item) => item.path.toLowerCase().endsWith('.json'))
-          .toList()
-        ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      final files =
+          historyDir
+              .listSync()
+              .whereType<File>()
+              .where((item) => item.path.toLowerCase().endsWith('.json'))
+              .toList()
+            ..sort(
+              (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
+            );
 
       return files.take(limit).map((file) {
         return SettingsBackupEntry(
@@ -661,10 +683,7 @@ class Settings extends _$Settings {
     _saveAndSet(state.copyWith(selectedSummaryProfileId: profileId));
   }
 
-  void addSummaryProfile({
-    required String name,
-    required String prompt,
-  }) {
+  void addSummaryProfile({required String name, required String prompt}) {
     final profile = SummaryProfile(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: name,
@@ -696,8 +715,9 @@ class Settings extends _$Settings {
     );
     if (profile.isBuiltIn) return;
 
-    final profiles =
-        state.summaryProfiles.where((item) => item.id != profileId).toList();
+    final profiles = state.summaryProfiles
+        .where((item) => item.id != profileId)
+        .toList();
     final selectedSummaryProfileId = state.selectedSummaryProfileId == profileId
         ? defaultSummaryProfileId
         : state.selectedSummaryProfileId;
