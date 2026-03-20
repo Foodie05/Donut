@@ -1,42 +1,22 @@
-# Vision PDF Reader
+# Donut Workspace
 
-A modern macOS PDF reader integrated with Vision AI, built with Flutter.
+This repository is now organized as a small monorepo:
 
-## Features
+- `donut_app/`: the existing Flutter application.
+- `donut_backend/`: a newly initialized Dart Frog backend service.
 
-- **Material Design 3**: Modern UI with NavigationRail and Tonal Elevation.
-- **PDF Reading**: High-performance rendering using `pdfrx`.
-- **Vision AI**: Analyze PDF pages using OpenAI-compatible Vision models.
-- **Local Library**: Manage your PDF collection with local database (ObjectBox).
-- **Responsive**: Optimized for macOS wide screens.
+## App
 
-## Setup
+```bash
+cd donut_app
+flutter pub get
+flutter run
+```
 
-1.  **Dependencies**:
-    ```bash
-    flutter pub get
-    ```
+## Backend
 
-2.  **Code Generation**:
-    ```bash
-    flutter pub run build_runner build --delete-conflicting-outputs
-    ```
-
-3.  **Run**:
-    ```bash
-    flutter run -d macos
-    ```
-
-## Configuration
-
-1.  Go to **Settings**.
-2.  Enter your **API Base URL** (e.g., `https://api.openai.com`).
-3.  Enter your **API Key**.
-4.  Toggle **Auto-Generate Summary** if desired.
-
-## Architecture
-
-- **State Management**: Riverpod
-- **Database**: ObjectBox
-- **PDF Engine**: pdfrx
-- **Network**: Dio
+```bash
+cd donut_backend
+dart pub get
+dart_frog dev
+```
