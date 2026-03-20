@@ -108,7 +108,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       decoration: InputDecoration(
                         labelText: l10n.apiBaseUrl,
                         border: const OutlineInputBorder(),
-                        helperText: 'Donut gateway base URL',
+                        helperText: 'e.g. https://api.openai.com',
                       ),
                       onChanged: (value) {
                         ref.read(settingsProvider.notifier).setBaseUrl(value);
@@ -132,7 +132,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       decoration: InputDecoration(
                         labelText: l10n.apiKey,
                         border: const OutlineInputBorder(),
-                        helperText: 'Managed Donut client key',
+                        helperText: 'sk-...',
                       ),
                       obscureText: true,
                       onChanged: (value) {
