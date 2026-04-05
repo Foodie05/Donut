@@ -35,8 +35,45 @@
   "addPdf": "Add PDF",
   "errorAddingBook": "Error adding book: ",
   "aiConfiguration": "AI Configuration",
-  "aiCategorySubtitle": "Configure model, endpoint, API key, and reply length",
+  "aiCategorySubtitle": "Configure model source, reply length, and custom connection",
   "apiBaseUrl": "API Base URL",
+  "serverModelSelection": "Server models",
+  "serverModelSelectionSubtitle": "Sign in to use models provided by the server",
+  "customModelOption": "Custom",
+  "customModelOptionSubtitle": "Use your own model service connection",
+  "loginForAiService": "Sign in to access AI service",
+  "loginForAiServiceSubtitle": "Sign in to use server-provided models",
+  "recommendedModelTag": "Recommended",
+  "customConnectionTitle": "Custom connection",
+  "testConnection": "Test connection",
+  "testingConnection": "Testing connection...",
+  "testConnectionSuccess": "Connection succeeded. Found {count} models.",
+  "@testConnectionSuccess": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "testConnectionFailed": "Connection failed. Please check the Base URL and API Key.",
+  "customConnectionHint": "When custom mode is enabled, Donut will use the Base URL, model, and API key you provide here.",
+  "serverModelsUnavailable": "No server models are available right now. Please contact the administrator.",
+  "aiServiceUnavailable": "AI service is unavailable",
+  "aiServiceUnavailableSubtitle": "Please choose a valid configuration",
+  "aiServiceSignInRequiredSubtitle": "Please sign in to enjoy the service",
+  "aiUnknownError": "An unknown error occurred",
+  "aiUnknownErrorSubtitle": "Please try switching models or contact the developer",
+  "aiQuotaExceededTitle": "Daily quota reached",
+  "aiQuotaExceededSubtitle": "You have used up today's quota. We will provide a smoother experience soon. Please stay tuned!",
+  "aiModelUnavailableTitle": "Model is temporarily unavailable",
+  "aiModelUnavailableSubtitle": "The model is temporarily unavailable. Please try another model or contact the developer.",
+  "aiCustomModelHint": "You are using a custom model. Switching to a Donut-provided model may give you a more stable experience.",
+  "aiNetworkUnavailableTitle": "Network unavailable",
+  "aiNetworkUnavailableSubtitle": "Network unavailable. Please check your connection.",
+  "openModelSettings": "Open model settings",
+  "pageNote": "Notes",
+  "pageNoteHint": "Write notes for this page here. Markdown is supported.",
+  "pageNoteEmpty": "There are no notes for this page yet. Tap here to start writing.",
+  "editNote": "Edit note",
+  "previewNote": "Preview note",
   "modelReplyLength": "Model Reply Length",
   "modelReplyLengthSubtitle": "Set a response cap to save tokens, but the result may be incomplete.",
   "modelReplyLengthShort": "Short",
@@ -82,6 +119,8 @@
   "smoothSummarySubtitle": "When the AI panel is open, pre-generate the next page summary in advance",
   "powerSavingMode": "Power Saving Mode",
   "powerSavingModeSubtitle": "When the AI panel is closed, don't start new summary tasks or countdowns",
+  "swapReaderPanels": "Swap side panels",
+  "swapReaderPanelsSubtitle": "Swap the thumbnail sidebar and AI panel positions",
   "summaryProfiles": "Summary Profiles",
   "createProfile": "Create Profile",
   "editProfile": "Edit Profile",
@@ -145,5 +184,101 @@
   "releaseNotesTitle": "Release Notes",
   "noReleaseNotes": "No release notes available.",
   "confirm": "Confirm",
-  "restore": "Restore"
+  "restore": "Restore",
+  "account": "Account",
+  "accountCategorySubtitle": "Review your login status and active session",
+  "signInTitle": "Sign in to Donut",
+  "signInSubtitle": "Sign in to Donut to enjoy the full experience.",
+  "sessionActive": "Session active",
+  "sessionExpiresAt": "Session expires at {time}",
+  "@sessionExpiresAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "waitingForBrowserSignIn": "Waiting for browser sign-in...",
+  "signOut": "Sign out",
+  "authenticatedStatus": "Authenticated",
+  "dailyQuotaLabel": "Today's quota",
+  "dailyQuotaUsage": "{used}/{limit} pages",
+  "@dailyQuotaUsage": {
+    "placeholders": {
+      "used": {},
+      "limit": {}
+    }
+  },
+  "chatOnlyModelTag": "Chat only",
+  "signedOutStatus": "Signed out",
+  "accountNameLabel": "Name",
+  "accountEmailLabel": "Email",
+  "accountSubjectLabel": "Subject",
+  "accountExpiresAtLabel": "Expires at",
+  "accountBffHint": "This app now uses a Donut backend session before accessing protected features.",
+  "refreshSignIn": "Refresh sign-in",
+  "signIn": "Sign in",
+  "authErrorGeneric": "We couldn't complete sign-in. Please try again.",
+  "authErrorOpenBrowser": "We couldn't open the browser. Please try again.",
+  "authErrorTimedOut": "Sign-in took too long. Please try again.",
+  "authErrorSessionExpired": "Your session expired. Please sign in again.",
+  "authErrorNetwork": "The network connection looks unavailable right now.",
+  "authErrorNotConfigured": "Sign-in is not configured yet. Please contact the administrator.",
+  "checkAppUpdateTitle": "Check App Updates (Rosemary)",
+  "checkAppUpdateSubtitle": "{platform}",
+  "@checkAppUpdateSubtitle": {
+    "placeholders": {
+      "platform": {}
+    }
+  },
+  "platformWeb": "Web",
+  "platformAndroid": "Android",
+  "platformIos": "iOS",
+  "platformMacos": "macOS",
+  "platformWindows": "Windows",
+  "platformLinux": "Linux",
+  "platformFuchsia": "Fuchsia",
+  "rosemaryUnsupportedPlatform": "Rosemary updates are not supported on this platform.",
+  "rosemaryNotConfigured": "Rosemary is not configured. Please configure it in Admin first.",
+  "rosemaryNoUpdate": "You're already on the latest version.",
+  "rosemaryNoUpdateWithVersion": "You're already on the latest version ({version}).",
+  "@rosemaryNoUpdateWithVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "rosemaryCheckFailedBrief": "Update check failed. Please try again later.",
+  "rosemaryUpdateAvailableTitle": "Update Available",
+  "rosemaryAppUpdateSectionTitle": "App Update",
+  "rosemaryResourceUpdateSectionTitle": "Resource Update",
+  "rosemaryAppUpdateAvailable": "A new app version is available.",
+  "rosemaryResourceUpdateAvailable": "A new resource package is available.",
+  "rosemaryNotesLabel": "Notes: {notes}",
+  "@rosemaryNotesLabel": {
+    "placeholders": {
+      "notes": {}
+    }
+  },
+  "rosemaryLater": "Later",
+  "rosemaryStartUpdate": "Start Update",
+  "rosemaryPreparingUpdate": "Preparing update...",
+  "rosemaryRunningUpdateTitle": "Running Rosemary Update",
+  "rosemaryProcessing": "Processing...",
+  "rosemaryProgress": "Progress: {progress}%",
+  "@rosemaryProgress": {
+    "placeholders": {
+      "progress": {}
+    }
+  },
+  "rosemaryUpdateFailedCloseAndRetry": "Update failed. Please close and try again.",
+  "rosemaryClose": "Close",
+  "rosemaryUpdateFailedBrief": "Update failed. Please try again later.",
+  "rosemaryUpdateCompleted": "Update completed.",
+  "rosemaryChecking": "Checking for updates...",
+  "rosemaryDownloadingApp": "Downloading app update...",
+  "rosemaryInstallingApp": "Installing app update...",
+  "rosemaryDownloadingResources": "Downloading resources...",
+  "rosemaryInstallingResources": "Installing resources...",
+  "rosemaryDmgOpenedHint": "DMG opened. Mount it and drag the app into Applications to finish the update.",
+  "rosemaryMacDmgPromptTitle": "Ready to Install Update",
+  "rosemaryMacDmgPromptBody": "The DMG will open next. Drag the new app into Applications to replace the current one. After opening the DMG, this app will quit automatically so replacement can proceed.",
+  "rosemaryMacDmgPromptConfirm": "Continue and Open DMG"
 }

@@ -121,10 +121,108 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiConfiguration => 'AI Configuration';
 
   @override
-  String get aiCategorySubtitle => 'Configure model, endpoint, API key, and reply length';
+  String get aiCategorySubtitle => 'Configure model source, reply length, and custom connection';
 
   @override
   String get apiBaseUrl => 'API Base URL';
+
+  @override
+  String get serverModelSelection => 'Server models';
+
+  @override
+  String get serverModelSelectionSubtitle => 'Sign in to use models provided by the server';
+
+  @override
+  String get customModelOption => 'Custom';
+
+  @override
+  String get customModelOptionSubtitle => 'Use your own model service connection';
+
+  @override
+  String get loginForAiService => 'Sign in to access AI service';
+
+  @override
+  String get loginForAiServiceSubtitle => 'Sign in to use server-provided models';
+
+  @override
+  String get recommendedModelTag => 'Recommended';
+
+  @override
+  String get customConnectionTitle => 'Custom connection';
+
+  @override
+  String get testConnection => 'Test connection';
+
+  @override
+  String get testingConnection => 'Testing connection...';
+
+  @override
+  String testConnectionSuccess(Object count) {
+    return 'Connection succeeded. Found $count models.';
+  }
+
+  @override
+  String get testConnectionFailed => 'Connection failed. Please check the Base URL and API Key.';
+
+  @override
+  String get customConnectionHint => 'When custom mode is enabled, Donut will use the Base URL, model, and API key you provide here.';
+
+  @override
+  String get serverModelsUnavailable => 'No server models are available right now. Please contact the administrator.';
+
+  @override
+  String get aiServiceUnavailable => 'AI service is unavailable';
+
+  @override
+  String get aiServiceUnavailableSubtitle => 'Please choose a valid configuration';
+
+  @override
+  String get aiServiceSignInRequiredSubtitle => 'Please sign in to enjoy the service';
+
+  @override
+  String get aiUnknownError => 'An unknown error occurred';
+
+  @override
+  String get aiUnknownErrorSubtitle => 'Please try switching models or contact the developer';
+
+  @override
+  String get aiQuotaExceededTitle => 'Daily quota reached';
+
+  @override
+  String get aiQuotaExceededSubtitle => 'You have used up today\'s quota. We will provide a smoother experience soon. Please stay tuned!';
+
+  @override
+  String get aiModelUnavailableTitle => 'Model is temporarily unavailable';
+
+  @override
+  String get aiModelUnavailableSubtitle => 'The model is temporarily unavailable. Please try another model or contact the developer.';
+
+  @override
+  String get aiCustomModelHint => 'You are using a custom model. Switching to a Donut-provided model may give you a more stable experience.';
+
+  @override
+  String get aiNetworkUnavailableTitle => 'Network unavailable';
+
+  @override
+  String get aiNetworkUnavailableSubtitle => 'Network unavailable. Please check your connection.';
+
+  @override
+  String get openModelSettings => 'Open model settings';
+
+  @override
+  String get pageNote => 'Notes';
+
+  @override
+  String get pageNoteHint => 'Write notes for this page here. Markdown is supported.';
+
+  @override
+  String get pageNoteEmpty => 'There are no notes for this page yet. Tap here to start writing.';
+
+  @override
+  String get editNote => 'Edit note';
+
+  @override
+  String get previewNote => 'Preview note';
 
   @override
   String get modelReplyLength => 'Model Reply Length';
@@ -247,6 +345,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get powerSavingModeSubtitle => 'When the AI panel is closed, don\'t start new summary tasks or countdowns';
+
+  @override
+  String get swapReaderPanels => 'Swap side panels';
+
+  @override
+  String get swapReaderPanelsSubtitle => 'Swap the thumbnail sidebar and AI panel positions';
 
   @override
   String get summaryProfiles => 'Summary Profiles';
@@ -426,4 +530,211 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get restore => 'Restore';
+
+  @override
+  String get account => 'Account';
+
+  @override
+  String get accountCategorySubtitle => 'Review your login status and active session';
+
+  @override
+  String get signInTitle => 'Sign in to Donut';
+
+  @override
+  String get signInSubtitle => 'Sign in to Donut to enjoy the full experience.';
+
+  @override
+  String get sessionActive => 'Session active';
+
+  @override
+  String sessionExpiresAt(Object time) {
+    return 'Session expires at $time';
+  }
+
+  @override
+  String get waitingForBrowserSignIn => 'Waiting for browser sign-in...';
+
+  @override
+  String get signOut => 'Sign out';
+
+  @override
+  String get authenticatedStatus => 'Authenticated';
+
+  @override
+  String get dailyQuotaLabel => 'Today\'s quota';
+
+  @override
+  String dailyQuotaUsage(Object used, Object limit) {
+    return '$used/$limit pages';
+  }
+
+  @override
+  String get chatOnlyModelTag => 'Chat only';
+
+  @override
+  String get signedOutStatus => 'Signed out';
+
+  @override
+  String get accountNameLabel => 'Name';
+
+  @override
+  String get accountEmailLabel => 'Email';
+
+  @override
+  String get accountSubjectLabel => 'Subject';
+
+  @override
+  String get accountExpiresAtLabel => 'Expires at';
+
+  @override
+  String get accountBffHint => 'This app now uses a Donut backend session before accessing protected features.';
+
+  @override
+  String get refreshSignIn => 'Refresh sign-in';
+
+  @override
+  String get signIn => 'Sign in';
+
+  @override
+  String get authErrorGeneric => 'We couldn\'t complete sign-in. Please try again.';
+
+  @override
+  String get authErrorOpenBrowser => 'We couldn\'t open the browser. Please try again.';
+
+  @override
+  String get authErrorTimedOut => 'Sign-in took too long. Please try again.';
+
+  @override
+  String get authErrorSessionExpired => 'Your session expired. Please sign in again.';
+
+  @override
+  String get authErrorNetwork => 'The network connection looks unavailable right now.';
+
+  @override
+  String get authErrorNotConfigured => 'Sign-in is not configured yet. Please contact the administrator.';
+
+  @override
+  String get checkAppUpdateTitle => 'Check App Updates (Rosemary)';
+
+  @override
+  String checkAppUpdateSubtitle(Object platform) {
+    return '$platform';
+  }
+
+  @override
+  String get platformWeb => 'Web';
+
+  @override
+  String get platformAndroid => 'Android';
+
+  @override
+  String get platformIos => 'iOS';
+
+  @override
+  String get platformMacos => 'macOS';
+
+  @override
+  String get platformWindows => 'Windows';
+
+  @override
+  String get platformLinux => 'Linux';
+
+  @override
+  String get platformFuchsia => 'Fuchsia';
+
+  @override
+  String get rosemaryUnsupportedPlatform => 'Rosemary updates are not supported on this platform.';
+
+  @override
+  String get rosemaryNotConfigured => 'Rosemary is not configured. Please configure it in Admin first.';
+
+  @override
+  String get rosemaryNoUpdate => 'You\'re already on the latest version.';
+
+  @override
+  String rosemaryNoUpdateWithVersion(Object version) {
+    return 'You\'re already on the latest version ($version).';
+  }
+
+  @override
+  String get rosemaryCheckFailedBrief => 'Update check failed. Please try again later.';
+
+  @override
+  String get rosemaryUpdateAvailableTitle => 'Update Available';
+
+  @override
+  String get rosemaryAppUpdateSectionTitle => 'App Update';
+
+  @override
+  String get rosemaryResourceUpdateSectionTitle => 'Resource Update';
+
+  @override
+  String get rosemaryAppUpdateAvailable => 'A new app version is available.';
+
+  @override
+  String get rosemaryResourceUpdateAvailable => 'A new resource package is available.';
+
+  @override
+  String rosemaryNotesLabel(Object notes) {
+    return 'Notes: $notes';
+  }
+
+  @override
+  String get rosemaryLater => 'Later';
+
+  @override
+  String get rosemaryStartUpdate => 'Start Update';
+
+  @override
+  String get rosemaryPreparingUpdate => 'Preparing update...';
+
+  @override
+  String get rosemaryRunningUpdateTitle => 'Running Rosemary Update';
+
+  @override
+  String get rosemaryProcessing => 'Processing...';
+
+  @override
+  String rosemaryProgress(Object progress) {
+    return 'Progress: $progress%';
+  }
+
+  @override
+  String get rosemaryUpdateFailedCloseAndRetry => 'Update failed. Please close and try again.';
+
+  @override
+  String get rosemaryClose => 'Close';
+
+  @override
+  String get rosemaryUpdateFailedBrief => 'Update failed. Please try again later.';
+
+  @override
+  String get rosemaryUpdateCompleted => 'Update completed.';
+
+  @override
+  String get rosemaryChecking => 'Checking for updates...';
+
+  @override
+  String get rosemaryDownloadingApp => 'Downloading app update...';
+
+  @override
+  String get rosemaryInstallingApp => 'Installing app update...';
+
+  @override
+  String get rosemaryDownloadingResources => 'Downloading resources...';
+
+  @override
+  String get rosemaryInstallingResources => 'Installing resources...';
+
+  @override
+  String get rosemaryDmgOpenedHint => 'DMG opened. Mount it and drag the app into Applications to finish the update.';
+
+  @override
+  String get rosemaryMacDmgPromptTitle => 'Ready to Install Update';
+
+  @override
+  String get rosemaryMacDmgPromptBody => 'The DMG will open next. Drag the new app into Applications to replace the current one. After opening the DMG, this app will quit automatically so replacement can proceed.';
+
+  @override
+  String get rosemaryMacDmgPromptConfirm => 'Continue and Open DMG';
 }

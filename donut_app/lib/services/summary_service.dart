@@ -1,13 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../data/repositories/page_repository.dart';
 import 'ai_service.dart';
+import 'debug_log_service.dart';
 import 'settings_service.dart';
 
 part 'summary_service.g.dart';
@@ -22,8 +22,8 @@ class SummaryGenerationService {
   static const int _maxRenderHeight = 3200;
 
   final Ref _ref;
-  // Track in-flight requests: bookId_pageIndex_profileId -> Future
   final Map<String, Future<void>> _pendingRequests = {};
+  final Map<String, String> _lastErrors = {};
 
   SummaryGenerationService(this._ref);
 
@@ -33,23 +33,64 @@ class SummaryGenerationService {
     String profileId,
     PdfDocument doc, {
     String? locale,
+    bool force = false,
   }) async {
     final key = '${bookId}_${pageIndex}_$profileId';
-    
-    // 1. Check DB
+
     final pageRepo = _ref.read(pageRepositoryProvider);
     final existingData = pageRepo.getPageData(bookId, pageIndex, profileId);
     if (existingData?.summary != null && existingData!.summary!.isNotEmpty) {
+      unawaited(
+        DebugLogService.debug(
+          source: 'SUMMARY_PIPELINE',
+          message: 'Skipped summary generation because summary already exists.',
+          context: {
+            'bookId': bookId,
+            'pageIndex': pageIndex,
+            'profileId': profileId,
+            'summaryLength': existingData.summary!.length,
+          },
+        ),
+      );
       return;
     }
 
-    // 2. Check pending
     if (_pendingRequests.containsKey(key)) {
+      unawaited(
+        DebugLogService.debug(
+          source: 'SUMMARY_PIPELINE',
+          message: 'Reused pending summary generation request.',
+          context: {
+            'bookId': bookId,
+            'pageIndex': pageIndex,
+            'profileId': profileId,
+          },
+        ),
+      );
       return _pendingRequests[key];
     }
 
-    // 3. Start Request
-    final future = _generateSummary(bookId, pageIndex, profileId, doc, locale: locale);
+    unawaited(
+      DebugLogService.info(
+        source: 'SUMMARY_PIPELINE',
+        message: 'Queued summary generation request.',
+        context: {
+          'bookId': bookId,
+          'pageIndex': pageIndex,
+          'profileId': profileId,
+          'locale': locale,
+          'pageCount': doc.pages.length,
+        },
+      ),
+    );
+    final future = _generateSummary(
+      bookId,
+      pageIndex,
+      profileId,
+      doc,
+      locale: locale,
+      force: force,
+    );
     _pendingRequests[key] = future;
 
     try {
@@ -63,91 +104,189 @@ class SummaryGenerationService {
     return _pendingRequests.containsKey('${bookId}_${pageIndex}_$profileId');
   }
 
+  String? lastError(int bookId, int pageIndex, String profileId) {
+    return _lastErrors['${bookId}_${pageIndex}_$profileId'];
+  }
+
   Future<void> _generateSummary(
     int bookId,
     int pageIndex,
     String profileId,
     PdfDocument doc, {
     String? locale,
+    bool force = false,
   }) async {
     final settings = _ref.read(settingsProvider);
-    if (!settings.autoGenerate) return;
-    final profile = settings.profileById(profileId);
+    if (!force && !settings.autoGenerate) {
+      await DebugLogService.debug(
+        source: 'SUMMARY_PIPELINE',
+        message: 'Skipped summary generation because auto-generate is off.',
+        context: {
+          'bookId': bookId,
+          'pageIndex': pageIndex,
+          'profileId': profileId,
+          'force': force,
+        },
+      );
+      return;
+    }
 
-    final aiService = _ref.read(aiServiceProvider);
-    final pageRepo = _ref.read(pageRepositoryProvider);
+    final profile = settings.profileById(profileId);
+    final key = '${bookId}_${pageIndex}_$profileId';
 
     try {
-      // Collect pages to render
-      final pagesToRender = <int>[];
-      // User request: Summary generation should ONLY use the current page, regardless of settings.
-      // Enhanced context is only for Chat.
-      /* 
+      var prompt = profile.prompt;
       if (settings.enablePseudoKBMode) {
-        if (pageIndex > 2) pagesToRender.add(pageIndex - 2);
-        if (pageIndex > 1) pagesToRender.add(pageIndex - 1);
-      }
-      */
-      pagesToRender.add(pageIndex);
-
-      // Render images
-      final base64Images = <String>[];
-      for (final pNum in pagesToRender) {
-        if (pNum > 0 && pNum <= doc.pages.length) {
-          final page = doc.pages[pNum - 1];
-          // Use smaller scale/size for context pages if needed, but for simplicity use consistent size
-          // Compress logic: Use jpeg with 80% quality or resize
-          var renderWidth = _targetRenderWidth;
-          var renderHeight = (renderWidth * page.height / page.width).round();
-          if (renderHeight > _maxRenderHeight) {
-            final scale = _maxRenderHeight / renderHeight;
-            renderHeight = _maxRenderHeight;
-            renderWidth = (renderWidth * scale).round();
-          }
-
-          final image = await page.render(
-            width: renderWidth,
-            height: renderHeight,
-            backgroundColor: 0xFFFFFFFF,
-          );
-          
-          if (image != null) {
-            final uiImage = await image.createImage();
-            final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
-            if (byteData != null) {
-              base64Images.add(base64Encode(byteData.buffer.asUint8List()));
-            }
-          }
-        }
+        prompt +=
+            ' If multiple images are present, prioritize current page and use previous pages only as context.';
       }
 
-      if (base64Images.isEmpty) return;
+      await DebugLogService.info(
+        source: 'SUMMARY_PIPELINE',
+        message: 'Dispatching image-based summary request to AI service.',
+        context: {
+          'bookId': bookId,
+          'pageIndex': pageIndex,
+          'profileId': profileId,
+          'enablePseudoKbMode': settings.enablePseudoKBMode,
+        },
+      );
 
-      // Initialize PageData to get ID for streaming updates
-      // This ensures we have a valid ID to update incrementally
-      int pageId = pageRepo.savePageSummary(bookId, pageIndex, profileId, "", null);
+      await _generateSummaryWithImageFallback(
+        bookId,
+        pageIndex,
+        profileId,
+        doc,
+        locale: locale,
+        prompt: prompt,
+        includeContextPages: settings.enablePseudoKBMode,
+      );
 
-      // Call AI Service
-      final sb = StringBuffer();
-      String prompt = profile.prompt;
-      if (settings.enablePseudoKBMode && base64Images.length > 1) {
-        prompt += " Context from previous pages is included. Please analyze comprehensively.";
-      }
-
-      final stream = aiService.analyzeImageStream(base64Images, prompt, locale: locale);
-      
-      await for (final chunk in stream) {
-        sb.write(chunk);
-        // Streaming update to DB
-        // We update directly by ID which is faster and triggers watchers
-        pageRepo.updatePageSummaryDirectly(pageId, sb.toString());
-      }
-
-    } catch (e) {
+      _lastErrors.remove(key);
+    } catch (e, stackTrace) {
+      _lastErrors[key] = e.toString();
+      await DebugLogService.error(
+        source: 'SUMMARY_PIPELINE',
+        message: 'Summary generation failed.',
+        error: e,
+        stackTrace: stackTrace,
+        context: {
+          'bookId': bookId,
+          'pageIndex': pageIndex,
+          'profileId': profileId,
+          'profileName': profile.name,
+        },
+      );
       if (kDebugMode) {
         print('Background summary generation failed: $e');
       }
-      // Optionally save error state to DB to avoid infinite retries
+      rethrow;
     }
+  }
+
+  Future<void> _generateSummaryWithImageFallback(
+    int bookId,
+    int pageIndex,
+    String profileId,
+    PdfDocument doc, {
+    required String prompt,
+    String? locale,
+    bool includeContextPages = false,
+  }) async {
+    final aiService = _ref.read(aiServiceProvider);
+    final pageRepo = _ref.read(pageRepositoryProvider);
+
+    final renderedImages = <Uint8List>[];
+    final renderSummaries = <Map<String, dynamic>>[];
+
+    final pagesToRender = <int>[
+      if (includeContextPages && pageIndex > 2) pageIndex - 2,
+      if (includeContextPages && pageIndex > 1) pageIndex - 1,
+      pageIndex,
+    ];
+
+    for (final currentPageIndex in pagesToRender) {
+      final page = doc.pages[currentPageIndex - 1];
+      var renderWidth = _targetRenderWidth;
+      var renderHeight = (renderWidth * page.height / page.width).round();
+      if (renderHeight > _maxRenderHeight) {
+        final scale = _maxRenderHeight / renderHeight;
+        renderHeight = _maxRenderHeight;
+        renderWidth = (renderWidth * scale).round();
+      }
+
+      final image = await page.render(
+        width: renderWidth,
+        height: renderHeight,
+        backgroundColor: 0xFFFFFFFF,
+      );
+
+      if (image == null) {
+        continue;
+      }
+
+      final uiImage = await image.createImage();
+      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        continue;
+      }
+
+      final bytes = byteData.buffer.asUint8List();
+      renderedImages.add(bytes);
+      renderSummaries.add({
+        'pageIndex': currentPageIndex,
+        'width': renderWidth,
+        'height': renderHeight,
+        'bytes': bytes.length,
+      });
+    }
+
+    await DebugLogService.debug(
+      source: 'SUMMARY_PIPELINE',
+      message: 'Rendered image fallback content for summary generation.',
+      context: {
+        'bookId': bookId,
+        'pageIndex': pageIndex,
+        'profileId': profileId,
+        'renderedImageCount': renderedImages.length,
+        'renderSummaries': renderSummaries,
+        'includeContextPages': includeContextPages,
+      },
+    );
+
+    if (renderedImages.isEmpty) {
+      throw StateError('summary_fallback_no_rendered_image');
+    }
+
+    final pageId = pageRepo.savePageSummary(
+      bookId,
+      pageIndex,
+      profileId,
+      '',
+      null,
+    );
+
+    final sb = StringBuffer();
+    final stream = aiService.analyzeImageStream(
+      renderedImages.map(AiImageInput.bytes).toList(),
+      prompt,
+      locale: locale,
+    );
+
+    await for (final chunk in stream) {
+      sb.write(chunk);
+      pageRepo.updatePageSummaryDirectly(pageId, sb.toString());
+    }
+
+    await DebugLogService.info(
+      source: 'SUMMARY_PIPELINE',
+      message: 'Summary generation completed via image fallback.',
+      context: {
+        'bookId': bookId,
+        'pageIndex': pageIndex,
+        'profileId': profileId,
+        'summaryLength': sb.length,
+      },
+    );
   }
 }

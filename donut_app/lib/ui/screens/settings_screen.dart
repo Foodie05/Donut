@@ -1,28 +1,136 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:rosemary_updater/rosemary_updater.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../legal/legal_documents.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/auth_service.dart';
+import '../../services/client_config_service.dart';
 import '../../services/debug_log_service.dart';
+import '../../services/model_connection_service.dart';
+import '../../services/rosemary_update_service.dart';
 import '../../services/settings_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.openAiConfigurationOnStart = false});
+
+  final bool openAiConfigurationOnStart;
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _isTestingCustomConnection = false;
+  bool _isCheckingRosemaryUpdate = false;
+  bool _didAutoOpenInitialSection = false;
+
+  bool get _useShareBasedExport =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  Future<File> _prepareSharedExportFile({
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    final tempDir = await getTemporaryDirectory();
+    final exportDir = Directory(p.join(tempDir.path, 'exports'));
+    if (!await exportDir.exists()) {
+      await exportDir.create(recursive: true);
+    }
+    final exportFile = File(p.join(exportDir.path, fileName));
+    await exportFile.writeAsBytes(bytes, flush: true);
+    return exportFile;
+  }
+
+  Future<File> _prepareSharedCopy({
+    required String sourcePath,
+    required String fileName,
+  }) async {
+    final tempDir = await getTemporaryDirectory();
+    final exportDir = Directory(p.join(tempDir.path, 'exports'));
+    if (!await exportDir.exists()) {
+      await exportDir.create(recursive: true);
+    }
+    final exportFile = File(p.join(exportDir.path, fileName));
+    if (await exportFile.exists()) {
+      await exportFile.delete();
+    }
+    return File(sourcePath).copy(exportFile.path);
+  }
+
+  Future<bool> _shareExportedFile({
+    required File file,
+    required String title,
+    String? text,
+  }) async {
+    final result = await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        title: title,
+        text: text,
+        sharePositionOrigin: _sharePositionOrigin(),
+      ),
+    );
+    return result.status != ShareResultStatus.dismissed;
+  }
+
+  Rect _sharePositionOrigin() {
+    Rect? rectFromRenderObject(RenderObject? renderObject) {
+      if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+      final size = renderObject.size;
+      if (size.width <= 0 || size.height <= 0) return null;
+      final origin = renderObject.localToGlobal(Offset.zero);
+      return Rect.fromLTWH(origin.dx, origin.dy, size.width, size.height);
+    }
+
+    final overlayRect = rectFromRenderObject(
+      Overlay.maybeOf(context)?.context.findRenderObject(),
+    );
+    final directRect = rectFromRenderObject(context.findRenderObject());
+    if (directRect != null && overlayRect != null) {
+      final visibleRect = directRect.intersect(overlayRect);
+      if (visibleRect.width > 0 && visibleRect.height > 0) {
+        return visibleRect;
+      }
+    }
+
+    if (overlayRect != null) {
+      return Rect.fromCenter(center: overlayRect.center, width: 1, height: 1);
+    }
+
+    final mediaSize = MediaQuery.sizeOf(context);
+    final safeWidth = mediaSize.width <= 0 ? 1.0 : mediaSize.width;
+    final safeHeight = mediaSize.height <= 0 ? 1.0 : mediaSize.height;
+    return Rect.fromCenter(
+      center: Offset(safeWidth / 2, safeHeight / 2),
+      width: 1,
+      height: 1,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+
+    if (widget.openAiConfigurationOnStart && !_didAutoOpenInitialSection) {
+      _didAutoOpenInitialSection = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openSubPage(l10n.aiConfiguration, _buildAiConfigurationPage());
+      });
+    }
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -68,6 +176,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onTap: () =>
                     _openSubPage(l10n.dataAndLegal, _buildDataAndLegalPage()),
               ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.system_update_alt_outlined),
+                title: Text(l10n.checkAppUpdateTitle),
+                subtitle: Text(
+                  l10n.checkAppUpdateSubtitle(_currentPlatformLabel(l10n)),
+                ),
+                trailing: _isCheckingRosemaryUpdate
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: _isCheckingRosemaryUpdate ? null : _checkRosemaryUpdate,
+              ),
             ],
           ),
         ),
@@ -92,78 +216,293 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Consumer(
       builder: (context, ref, _) {
         final settings = ref.watch(settingsProvider);
+        final authState = ref.watch(authControllerProvider);
+        final clientConfigAsync = ref.watch(clientConfigProvider);
         final l10n = AppLocalizations.of(context)!;
+        final clientConfig = clientConfigAsync.maybeWhen(
+          data: (value) => value,
+          orElse: () => null,
+        );
+        final serverModelDescriptors =
+            clientConfig?.serverModels
+                .where((item) => item.supportsChat)
+                .toList() ??
+            const [];
+        final serverModels = serverModelDescriptors
+            .map((item) => item.name)
+            .toList();
+        final selectedModelOption = settings.useCustomModelConfig
+            ? '__custom__'
+            : settings.selectedServerModelName;
+
+        if (authState.isAuthenticated &&
+            !settings.useCustomModelConfig &&
+            clientConfig != null &&
+            serverModels.isNotEmpty &&
+            !serverModels.contains(settings.selectedServerModelName)) {
+          Future<void>.microtask(() {
+            if (!mounted) return;
+            ref
+                .read(settingsProvider.notifier)
+                .setSelectedServerModelName(
+                  serverModels.contains(clientConfig.defaultModel)
+                      ? clientConfig.defaultModel
+                      : serverModels.first,
+                );
+          });
+        }
 
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
             Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextFormField(
-                      initialValue: settings.baseUrl,
-                      decoration: InputDecoration(
-                        labelText: l10n.apiBaseUrl,
-                        border: const OutlineInputBorder(),
-                        helperText: 'e.g. https://api.openai.com',
+              child: Column(
+                children: [
+                  if (authState.isAuthenticated) ...[
+                    for (final model in serverModels)
+                      (() {
+                        final descriptor = serverModelDescriptors.firstWhere(
+                          (item) => item.name == model,
+                        );
+                        final subtitleParts = <String>[
+                          l10n.serverModelSelection,
+                          'x${descriptor.multiplier.toStringAsFixed(descriptor.multiplier % 1 == 0 ? 0 : 1)}',
+                          if (!descriptor.supportsSummary)
+                            l10n.chatOnlyModelTag,
+                        ];
+                        return Column(
+                          children: [
+                            RadioListTile<String>(
+                              value: model,
+                              groupValue: selectedModelOption,
+                              onChanged: (_) {
+                                ref
+                                    .read(settingsProvider.notifier)
+                                    .setUseCustomModelConfig(false);
+                                ref
+                                    .read(settingsProvider.notifier)
+                                    .setSelectedServerModelName(model);
+                              },
+                              title: Row(
+                                children: [
+                                  Expanded(child: Text(model)),
+                                  if (descriptor.recommended)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.secondaryContainer,
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        l10n.recommendedModelTag,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSecondaryContainer,
+                                            ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              subtitle: Text(subtitleParts.join(' · ')),
+                              selected:
+                                  !settings.useCustomModelConfig &&
+                                  settings.selectedServerModelName == model,
+                            ),
+                            if (model != serverModels.last)
+                              const Divider(height: 1),
+                          ],
+                        );
+                      })(),
+                    if (clientConfigAsync.isLoading)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
                       ),
-                      onChanged: (value) {
-                        ref.read(settingsProvider.notifier).setBaseUrl(value);
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: settings.modelName,
-                      decoration: InputDecoration(
-                        labelText: l10n.modelName,
-                        border: const OutlineInputBorder(),
-                        helperText: 'e.g. gpt-4-vision-preview, gemini-1.5-pro',
+                    if (!clientConfigAsync.isLoading && serverModels.isEmpty)
+                      ListTile(
+                        leading: const Icon(Icons.info_outline),
+                        title: Text(l10n.serverModelsUnavailable),
                       ),
-                      onChanged: (value) {
-                        ref.read(settingsProvider.notifier).setModelName(value);
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: settings.apiKey,
-                      decoration: InputDecoration(
-                        labelText: l10n.apiKey,
-                        border: const OutlineInputBorder(),
-                        helperText: 'sk-...',
-                      ),
-                      obscureText: true,
-                      onChanged: (value) {
-                        ref.read(settingsProvider.notifier).setApiKey(value);
-                      },
-                    ),
-                    const SizedBox(height: 8),
+                  ] else
                     ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(l10n.modelReplyLength),
-                      subtitle: Text(l10n.modelReplyLengthSubtitle),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      enabled: false,
+                      leading: const Icon(Icons.lock_outline),
+                      title: Text(l10n.loginForAiService),
+                      subtitle: Text(l10n.loginForAiServiceSubtitle),
+                    ),
+                  const Divider(height: 1),
+                  RadioListTile<String>(
+                    value: '__custom__',
+                    groupValue: selectedModelOption,
+                    onChanged: (_) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .setUseCustomModelConfig(true);
+                    },
+                    title: Text(l10n.customModelOption),
+                    subtitle: Text(l10n.customModelOptionSubtitle),
+                  ),
+                  if (settings.useCustomModelConfig) ...[
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _replyLengthLabel(l10n, settings.modelReplyLength),
+                            l10n.customConnectionTitle,
+                            style: Theme.of(context).textTheme.titleMedium,
                           ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.chevron_right),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.customConnectionHint,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            initialValue: settings.baseUrl,
+                            decoration: InputDecoration(
+                              labelText: l10n.apiBaseUrl,
+                              border: const OutlineInputBorder(),
+                              helperText: 'e.g. https://api.openai.com/v1',
+                            ),
+                            onChanged: (value) {
+                              ref
+                                  .read(settingsProvider.notifier)
+                                  .setBaseUrl(value);
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            initialValue: settings.modelName,
+                            decoration: InputDecoration(
+                              labelText: l10n.modelName,
+                              border: const OutlineInputBorder(),
+                            ),
+                            onChanged: (value) {
+                              ref
+                                  .read(settingsProvider.notifier)
+                                  .setModelName(value);
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            initialValue: settings.apiKey,
+                            decoration: InputDecoration(
+                              labelText: l10n.apiKey,
+                              border: const OutlineInputBorder(),
+                              helperText: 'sk-...',
+                            ),
+                            obscureText: true,
+                            onChanged: (value) {
+                              ref
+                                  .read(settingsProvider.notifier)
+                                  .setApiKey(value);
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _isTestingCustomConnection
+                                ? null
+                                : () => _testCustomConnection(
+                                    settings.baseUrl,
+                                    settings.apiKey,
+                                    l10n,
+                                  ),
+                            icon: _isTestingCustomConnection
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.network_check_rounded),
+                            label: Text(
+                              _isTestingCustomConnection
+                                  ? l10n.testingConnection
+                                  : l10n.testConnection,
+                            ),
+                          ),
                         ],
                       ),
-                      onTap: () => _showModelReplyLengthSheet(context),
                     ),
                   ],
-                ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: Text(l10n.modelReplyLength),
+                    subtitle: Text(l10n.modelReplyLengthSubtitle),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _replyLengthLabel(l10n, settings.modelReplyLength),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                    onTap: () => _showModelReplyLengthSheet(context),
+                  ),
+                ],
               ),
             ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _testCustomConnection(
+    String baseUrl,
+    String apiKey,
+    AppLocalizations l10n,
+  ) async {
+    setState(() {
+      _isTestingCustomConnection = true;
+    });
+    try {
+      final result = await ModelConnectionService().test(
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.testConnectionSuccess(result.modelCount))),
+      );
+    } on ModelConnectionException catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.testConnectionFailed)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.testConnectionFailed)));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTestingCustomConnection = false;
+        });
+      }
+    }
   }
 
   Widget _buildReaderPage() {
@@ -223,6 +562,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ref
                           .read(settingsProvider.notifier)
                           .setPowerSavingMode(value);
+                    },
+                  ),
+                  SwitchListTile(
+                    title: Text(l10n.swapReaderPanels),
+                    subtitle: Text(l10n.swapReaderPanelsSubtitle),
+                    value: settings.readerPanelsSwapped,
+                    onChanged: (value) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .setReaderPanelsSwapped(value);
                     },
                   ),
                   if (settings.autoGenerate)
@@ -469,6 +818,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
+      if (_useShareBasedExport) {
+        final exportFile = await _prepareSharedExportFile(
+          fileName: 'donut_settings.json',
+          bytes: utf8.encode(
+            ref
+                .read(settingsProvider.notifier)
+                .exportSettingsAsJson(pretty: true),
+          ),
+        );
+        final didShare = await _shareExportedFile(
+          file: exportFile,
+          title: l10n.saveSettingsJson,
+          text: 'Donut settings',
+        );
+        if (!mounted || !didShare) return;
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.exportSettingsSuccess)),
+        );
+        return;
+      }
+
       final filePath = await FilePicker.platform.saveFile(
         dialogTitle: l10n.saveSettingsJson,
         fileName: 'donut_settings.json',
@@ -502,6 +872,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     try {
       final sourcePath = await DebugLogService.getLogFilePath();
+      if (_useShareBasedExport) {
+        final exportFile = await _prepareSharedCopy(
+          sourcePath: sourcePath,
+          fileName: 'donut_debug.log',
+        );
+        final didShare = await _shareExportedFile(
+          file: exportFile,
+          title: l10n.saveDebugLog,
+          text: 'Donut debug log',
+        );
+        if (!mounted || !didShare) return;
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.exportDebugLogsSuccess)),
+        );
+        return;
+      }
+
       final filePath = await FilePicker.platform.saveFile(
         dialogTitle: l10n.saveDebugLog,
         fileName: 'donut_debug.log',
@@ -520,13 +907,397 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.exportDebugLogsSuccess)),
       );
-    } catch (e) {
-      await DebugLogService.log('Export debug logs failed err=$e', tag: 'LOG');
+    } catch (e, stackTrace) {
+      await DebugLogService.error(
+        source: 'LOG',
+        message: 'Export debug logs failed.',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.exportDebugLogsFailed)),
       );
     }
+  }
+
+  Future<void> _checkRosemaryUpdate() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    setState(() {
+      _isCheckingRosemaryUpdate = true;
+    });
+
+    try {
+      final result = await ref
+          .read(rosemaryUpdateServiceProvider)
+          .checkUpdate();
+      if (!mounted) return;
+
+      switch (result.state) {
+        case RosemaryCheckState.unsupportedPlatform:
+          messenger.showSnackBar(
+            SnackBar(content: Text(l10n.rosemaryUnsupportedPlatform)),
+          );
+          return;
+        case RosemaryCheckState.notConfigured:
+          messenger.showSnackBar(
+            SnackBar(content: Text(l10n.rosemaryNotConfigured)),
+          );
+          return;
+        case RosemaryCheckState.noUpdate:
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                result.currentVersion == null
+                    ? l10n.rosemaryNoUpdate
+                    : l10n.rosemaryNoUpdateWithVersion(result.currentVersion!),
+              ),
+            ),
+          );
+          return;
+        case RosemaryCheckState.failed:
+          await DebugLogService.error(
+            source: 'ROSEMARY',
+            message: 'Check update failed.',
+            error: result.errorMessage ?? 'unknown_error',
+          );
+          messenger.showSnackBar(
+            SnackBar(content: Text(l10n.rosemaryCheckFailedBrief)),
+          );
+          return;
+        case RosemaryCheckState.hasUpdate:
+          final info = result.updateInfo;
+          if (info != null) {
+            await _showRosemaryUpdateInfo(info);
+          }
+          return;
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingRosemaryUpdate = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showRosemaryUpdateInfo(UpdateReceive info) async {
+    final l10n = AppLocalizations.of(context)!;
+    final appDescription = _localizedPlatformText(
+      info.appUpgradeDescription,
+      l10n.rosemaryAppUpdateAvailable,
+    );
+    final appNotes = _localizedPlatformText(info.appUpgradeNotes, '');
+    final resDescription = _localizedPlatformText(
+      info.resUpgradeDescription,
+      l10n.rosemaryResourceUpdateAvailable,
+    );
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.rosemaryUpdateAvailableTitle),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (info.appUpgrade) ...[
+                    Text(
+                      l10n.rosemaryAppUpdateSectionTitle,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(appDescription),
+                    if (appNotes.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(l10n.rosemaryNotesLabel(appNotes)),
+                    ],
+                    const SizedBox(height: 12),
+                  ],
+                  if (info.resUpgrade) ...[
+                    Text(
+                      l10n.rosemaryResourceUpdateSectionTitle,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(resDescription),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.rosemaryLater),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _runRosemaryUpdate(info);
+              },
+              icon: const Icon(Icons.download_for_offline_outlined),
+              label: Text(l10n.rosemaryStartUpdate),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _runRosemaryUpdate(UpdateReceive info) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final requiresMacDmgFlow = _requiresMacDmgExitFlow(info);
+    if (requiresMacDmgFlow) {
+      final confirmed = await _confirmMacDmgFlow(l10n);
+      if (!confirmed) return;
+    }
+    final notifier = ValueNotifier<UpdateStatus>(
+      UpdateStatus(checking: true, message: l10n.rosemaryPreparingUpdate),
+    );
+
+    final runFuture =
+        ref
+            .read(rosemaryUpdateServiceProvider)
+            .runUpdate(
+              updateInfo: info,
+              onStatusChanged: (status) {
+                notifier.value = status;
+              },
+            )
+          ..catchError((error, stackTrace) async {
+            await DebugLogService.error(
+              source: 'ROSEMARY',
+              message: 'Update task failed.',
+              error: error,
+              stackTrace: stackTrace is StackTrace ? stackTrace : null,
+            );
+            notifier.value = UpdateStatus(
+              error: error.toString(),
+              message: l10n.rosemaryUpdateFailedCloseAndRetry,
+            );
+          });
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return ValueListenableBuilder<UpdateStatus>(
+          valueListenable: notifier,
+          builder: (context, status, _) {
+            final progress = status.progress.clamp(0, 100);
+            final isBusy =
+                status.checking || status.downloading || status.installing;
+            final hasError = status.error != null && status.error!.isNotEmpty;
+            final canClose = hasError || !isBusy || status.success;
+
+            return PopScope(
+              canPop: canClose,
+              child: AlertDialog(
+                title: Text(l10n.rosemaryRunningUpdateTitle),
+                content: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LinearProgressIndicator(
+                        value: isBusy ? progress / 100 : null,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _localizedUpdateStatusMessage(
+                          status.message,
+                          l10n: l10n,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(l10n.rosemaryProgress(progress)),
+                      if (hasError) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n.rosemaryUpdateFailedCloseAndRetry,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  if (canClose)
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: Text(l10n.rosemaryClose),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    try {
+      await runFuture;
+      if (!mounted) return;
+      final finalStatus = notifier.value;
+      if (finalStatus.error != null && finalStatus.error!.isNotEmpty) {
+        await DebugLogService.error(
+          source: 'ROSEMARY',
+          message: 'Update completed with error status.',
+          error: finalStatus.error,
+          context: {'finalMessage': finalStatus.message},
+        );
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.rosemaryUpdateFailedBrief)),
+        );
+      } else {
+        if (requiresMacDmgFlow) {
+          await DebugLogService.info(
+            source: 'ROSEMARY',
+            message: 'macOS DMG opened, app will exit shortly for replacement.',
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 1200));
+          exit(0);
+        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              finalStatus.message.isEmpty
+                  ? l10n.rosemaryUpdateCompleted
+                  : _localizedUpdateStatusMessage(
+                      finalStatus.message,
+                      l10n: l10n,
+                    ),
+            ),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      await DebugLogService.error(
+        source: 'ROSEMARY',
+        message: 'Update flow threw exception.',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.rosemaryUpdateFailedBrief)),
+      );
+    } finally {
+      notifier.dispose();
+    }
+  }
+
+  bool _requiresMacDmgExitFlow(UpdateReceive info) {
+    if (kIsWeb) return false;
+    return Platform.isMacOS &&
+        info.appUpgradeInstallKind.toLowerCase().trim() == 'dmg';
+  }
+
+  Future<bool> _confirmMacDmgFlow(AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.rosemaryMacDmgPromptTitle),
+          content: Text(l10n.rosemaryMacDmgPromptBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.rosemaryLater),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.rosemaryMacDmgPromptConfirm),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
+  }
+
+  String _currentPlatformLabel(AppLocalizations l10n) {
+    if (kIsWeb) return l10n.platformWeb;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return l10n.platformAndroid;
+      case TargetPlatform.iOS:
+        return l10n.platformIos;
+      case TargetPlatform.macOS:
+        return l10n.platformMacos;
+      case TargetPlatform.windows:
+        return l10n.platformWindows;
+      case TargetPlatform.linux:
+        return l10n.platformLinux;
+      case TargetPlatform.fuchsia:
+        return l10n.platformFuchsia;
+    }
+  }
+
+  String _stripParentheticalContent(String text) {
+    return text
+        .replaceAll(RegExp(r'\([^)]*\)'), '')
+        .replaceAll(RegExp(r'（[^）]*）'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String _localizedPlatformText(String raw, String fallback) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) return fallback;
+    final l10n = AppLocalizations.of(context)!;
+    final currentPlatform = _currentPlatformLabel(l10n);
+    final candidates = normalized
+        .split(RegExp(r'[\n;；]'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    for (final item in candidates) {
+      if (item.contains(currentPlatform)) {
+        return _stripParentheticalContent(item);
+      }
+    }
+    return _stripParentheticalContent(normalized);
+  }
+
+  String _localizedUpdateStatusMessage(
+    String raw, {
+    required AppLocalizations l10n,
+  }) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) return l10n.rosemaryProcessing;
+    if (normalized == 'Checking for updates...') return l10n.rosemaryChecking;
+    if (normalized == 'No updates available') return l10n.rosemaryNoUpdate;
+    if (normalized == 'Downloading app update...') {
+      return l10n.rosemaryDownloadingApp;
+    }
+    if (normalized == 'Installing app update...') {
+      return l10n.rosemaryInstallingApp;
+    }
+    if (normalized == 'Downloading resources...') {
+      return l10n.rosemaryDownloadingResources;
+    }
+    if (normalized == 'Installing resources...') {
+      return l10n.rosemaryInstallingResources;
+    }
+    if (normalized == 'Update completed successfully') {
+      return l10n.rosemaryUpdateCompleted;
+    }
+    if (normalized == 'Update failed') return l10n.rosemaryUpdateFailedBrief;
+    if (normalized.startsWith('DMG opened.')) {
+      return l10n.rosemaryDmgOpenedHint;
+    }
+    return _stripParentheticalContent(normalized);
   }
 
   Future<void> _showSettingsHistorySheet() async {

@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -12,18 +13,24 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../../data/repositories/page_repository.dart';
 import '../../services/ai_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/client_config_service.dart';
+import '../../services/debug_log_service.dart';
 import '../../services/settings_service.dart';
 import '../../services/summary_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../screens/settings_screen.dart';
 import '../screens/reader/reader_state.dart';
 import 'streaming_typewriter_text.dart';
-import 'typing_indicator.dart';
+
+enum _AiPanelMode { assistant, note }
 
 class AiPanel extends ConsumerStatefulWidget {
   final int bookId;
   final GlobalKey pdfKey;
   final bool isVisible;
   final VoidCallback onClose;
+  final bool attachToLeft;
   // We need PdfDocument for rendering in background service
   // But AiPanel might not have direct access easily unless passed down
   // or accessed via a provider.
@@ -39,6 +46,7 @@ class AiPanel extends ConsumerStatefulWidget {
     required this.pdfKey,
     required this.isVisible,
     required this.onClose,
+    required this.attachToLeft,
     required this.pdfDocument,
   });
 
@@ -50,43 +58,44 @@ class _AiPanelState extends ConsumerState<AiPanel>
     with TickerProviderStateMixin {
   StreamSubscription? _aiSubscription;
   Timer? _debounce;
+  late final PageRepository _pageRepository;
   // Remove local _summary state, rely on DB/Stream
   // But for smooth transition we might want to keep local until stream updates
   // Actually, using StreamBuilder on the specific page data is better.
 
   bool _isLoading = false;
+  _AiPanelErrorState? _runtimeErrorState;
   int? _lastProcessedPage;
   final TextEditingController _chatController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+  final FocusNode _noteFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
+  _AiPanelMode _panelMode = _AiPanelMode.assistant;
+  bool _isEditingNote = false;
 
   // Countdown Animation
   late AnimationController _countdownController;
 
   // Content Transition Animation
   late AnimationController _contentTransitionController;
-  late Animation<double> _contentFadeAnimation;
   int? _pendingPageIndex; // The next page index we are transitioning TO
   int _displayPageIndex = 0; // The page index currently being displayed
 
-  // Slide Animation Controller
-  late AnimationController _slideController;
-  late Animation<Offset> _slideAnimation;
+  ProviderSubscription<String>? _summaryProfileSubscription;
+  ProviderSubscription<int>? _currentPageSubscription;
+  int? _activeStreamingMessageId;
+  int? _failedAssistantMessageId;
+  String? _failedUserPrompt;
+  int? _failedPageIndex;
+  String? _failedProfileId;
 
   @override
   void initState() {
     super.initState();
+    _pageRepository = ref.read(pageRepositoryProvider);
     // Initialize display page
     _displayPageIndex = ref.read(currentPageProvider);
     _lastProcessedPage = _displayPageIndex;
-
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero).animate(
-          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-        );
 
     _contentTransitionController = AnimationController(
       vsync: this,
@@ -94,13 +103,6 @@ class _AiPanelState extends ConsumerState<AiPanel>
         milliseconds: 300,
       ), // Total cycle: 150ms out + 150ms in
     );
-    _contentFadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _contentTransitionController,
-        curve: Curves.easeInOutCubic,
-      ),
-    );
-
     // Listen to transition status
     _contentTransitionController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
@@ -116,53 +118,91 @@ class _AiPanelState extends ConsumerState<AiPanel>
       duration: const Duration(seconds: 2), // 2s per cycle
     );
 
-    if (widget.isVisible) {
-      _slideController.value = 1.0;
-      _contentTransitionController.value = 0.0; // Visible
+    _contentTransitionController.value = 0.0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _updateContentToPage(_displayPageIndex);
+    });
+
+    _noteFocusNode.addListener(() {
+      if (_noteFocusNode.hasFocus) {
+        if (mounted) {
+          setState(() {
+            _isEditingNote = true;
+          });
+        }
+        return;
+      }
+      _persistCurrentNote();
+      if (mounted) {
+        setState(() {
+          _isEditingNote = false;
+        });
+      }
+    });
+
+    _summaryProfileSubscription = ref.listenManual<String>(
+      settingsProvider.select((value) => value.selectedSummaryProfileId),
+      (previous, next) {
+        if (previous == next) {
+          return;
+        }
+        _handlePageChange(_displayPageIndex, ref.read(settingsProvider));
+      },
+    );
+
+    _currentPageSubscription = ref.listenManual<int>(currentPageProvider, (
+      previous,
+      next,
+    ) {
+      if (next == _displayPageIndex) {
+        return;
+      }
+      _handlePageChange(next, ref.read(settingsProvider));
+    });
+
+    if (_lastProcessedPage == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _updateContentToPage(_displayPageIndex);
+        if (!mounted) {
+          return;
+        }
+        final currentPage = ref.read(currentPageProvider);
+        if (currentPage > 0) {
+          _handlePageChange(currentPage, ref.read(settingsProvider));
+        }
       });
-    } else {
-      _contentTransitionController.value = 1.0; // Hidden
     }
   }
 
   @override
   void didUpdateWidget(AiPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isVisible != oldWidget.isVisible) {
-      if (widget.isVisible) {
-        _slideController.forward();
-        _contentTransitionController.reverse(); // Ensure visible
-        final settings = ref.read(settingsProvider);
-        _updateContentToPage(ref.read(currentPageProvider));
-        _scheduleSmoothSummaryPrefetch(ref.read(currentPageProvider), settings);
-      } else {
-        _slideController.reverse();
-        final settings = ref.read(settingsProvider);
-        if (settings.powerSavingMode) {
-          _countdownController.stop();
-          _countdownController.reset();
-        }
-      }
+    if (widget.attachToLeft != oldWidget.attachToLeft && mounted) {
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
+    _summaryProfileSubscription?.close();
+    _currentPageSubscription?.close();
     _aiSubscription?.cancel();
     _debounce?.cancel();
     _countdownController.dispose();
     _contentTransitionController.dispose();
-    _slideController.dispose();
     _chatController.dispose();
+    _persistCurrentNote();
+    _noteController.dispose();
+    _noteFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   // Actual content update logic
   void _updateContentToPage(int pageIndex, {bool animateReset = false}) {
+    if (_displayPageIndex != pageIndex) {
+      _persistCurrentNote();
+    }
     _lastProcessedPage = pageIndex;
     final profileId = ref.read(settingsProvider).selectedSummaryProfileId;
 
@@ -186,8 +226,10 @@ class _AiPanelState extends ConsumerState<AiPanel>
     final settings = ref.read(settingsProvider);
 
     setState(() {
+      _runtimeErrorState = null;
       _displayPageIndex = pageIndex; // Important: update display index
     });
+    _loadNoteForPage(pageIndex);
 
     // Pre-check if we need to load or countdown
     if (pageData != null &&
@@ -208,6 +250,53 @@ class _AiPanelState extends ConsumerState<AiPanel>
     }
 
     _scheduleSmoothSummaryPrefetch(pageIndex, settings);
+  }
+
+  void _loadNoteForPage(int pageIndex) {
+    final note = _pageRepository.getPageNote(widget.bookId, pageIndex);
+    if (_noteController.text != note) {
+      _noteController.text = note;
+    }
+    if (!_noteFocusNode.hasFocus && mounted) {
+      setState(() {
+        _isEditingNote = false;
+      });
+    }
+  }
+
+  void _persistCurrentNote() {
+    final pageIndex = _displayPageIndex;
+    _pageRepository.savePageNote(
+      widget.bookId,
+      pageIndex,
+      _noteController.text,
+    );
+  }
+
+  void _togglePanelMode() {
+    if (_panelMode == _AiPanelMode.note && _noteFocusNode.hasFocus) {
+      _noteFocusNode.unfocus();
+    }
+    setState(() {
+      _panelMode = _panelMode == _AiPanelMode.assistant
+          ? _AiPanelMode.note
+          : _AiPanelMode.assistant;
+      if (_panelMode == _AiPanelMode.note) {
+        _loadNoteForPage(_displayPageIndex);
+      }
+    });
+  }
+
+  void _startEditingNote() {
+    if (_panelMode != _AiPanelMode.note) return;
+    setState(() {
+      _isEditingNote = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _noteFocusNode.requestFocus();
+      }
+    });
   }
 
   void _startCountdownForPage(int pageIndex, SettingsModel settings) {
@@ -250,7 +339,37 @@ class _AiPanelState extends ConsumerState<AiPanel>
             )
             .then((_) {
               if (mounted && _lastProcessedPage == currentTrackedIndex) {
-                setState(() => _isLoading = false);
+                setState(() {
+                  _isLoading = false;
+                  _runtimeErrorState = null;
+                });
+              }
+            })
+            .catchError((error, stackTrace) {
+              unawaited(
+                DebugLogService.error(
+                  source: 'AI_PANEL',
+                  message:
+                      'Auto summary generation failed from countdown trigger.',
+                  error: error,
+                  stackTrace: stackTrace is StackTrace ? stackTrace : null,
+                  context: {
+                    'bookId': widget.bookId,
+                    'pageIndex': currentTrackedIndex,
+                    'profileId': profileId,
+                  },
+                ),
+              );
+              if (mounted && _lastProcessedPage == currentTrackedIndex) {
+                final runtimeError = _classifyAiPanelError(
+                  l10n: AppLocalizations.of(context)!,
+                  error: error,
+                  settings: ref.read(settingsProvider),
+                );
+                setState(() {
+                  _isLoading = false;
+                  _runtimeErrorState = runtimeError;
+                });
               }
             });
       }
@@ -259,7 +378,7 @@ class _AiPanelState extends ConsumerState<AiPanel>
 
   bool _canAutoStartSummary(SettingsModel settings) {
     if (!settings.autoGenerate) return false;
-    if (settings.powerSavingMode && !widget.isVisible) return false;
+    if (settings.powerSavingMode && !mounted) return false;
     return true;
   }
 
@@ -267,8 +386,7 @@ class _AiPanelState extends ConsumerState<AiPanel>
     int currentPageIndex,
     SettingsModel settings,
   ) {
-    if (!widget.isVisible ||
-        !settings.autoGenerate ||
+    if (!settings.autoGenerate ||
         !settings.smoothSummary ||
         widget.pdfDocument == null) {
       return;
@@ -297,87 +415,88 @@ class _AiPanelState extends ConsumerState<AiPanel>
       return;
 
     unawaited(
-      summaryService.ensureSummary(
-        widget.bookId,
-        nextPageIndex,
-        profileId,
-        doc,
-        locale: Localizations.localeOf(context).languageCode,
-      ),
+      summaryService
+          .ensureSummary(
+            widget.bookId,
+            nextPageIndex,
+            profileId,
+            doc,
+            locale: Localizations.localeOf(context).languageCode,
+          )
+          .catchError((error, stackTrace) {
+            return DebugLogService.warn(
+              source: 'AI_PANEL',
+              message: 'Smooth summary prefetch failed.',
+              error: error,
+              stackTrace: stackTrace is StackTrace ? stackTrace : null,
+              context: {
+                'bookId': widget.bookId,
+                'pageIndex': nextPageIndex,
+                'profileId': profileId,
+              },
+            );
+          }),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currentPage = ref.watch(currentPageProvider);
     final settings = ref.watch(settingsProvider);
+    final authState = ref.watch(authControllerProvider);
+    final clientConfigAsync = ref.watch(clientConfigProvider);
+    final clientConfig = clientConfigAsync.maybeWhen(
+      data: (value) => value,
+      orElse: () => null,
+    );
+    final clientConfigError = clientConfigAsync.hasError
+        ? clientConfigAsync.error
+        : null;
     final panelWidth = ref.watch(aiPanelWidthProvider);
     final l10n = AppLocalizations.of(context)!;
-
-    ref.listen<String>(
-      settingsProvider.select((value) => value.selectedSummaryProfileId),
-      (previous, next) {
-        if (previous == next) return;
-        _handlePageChange(_displayPageIndex, ref.read(settingsProvider));
-      },
+    final aiAvailability = _resolveAiAvailability(
+      settings: settings,
+      authState: authState,
+      clientConfig: clientConfig,
+      clientConfigError: clientConfigError,
+      l10n: l10n,
     );
-
-    // Listen to page changes
-    ref.listen(currentPageProvider, (previous, next) {
-      if (next == _displayPageIndex) return;
-
-      // Cleanup previous page logic
-      _handlePageChange(next, settings);
-
-      // Animation is triggered by _handlePageChange via _contentTransitionController.forward()
-      // We don't need to manually trigger it here again, or we might double-trigger.
-      // _handlePageChange calls forward(). The listener on controller calls _updateContentToPage + reverse().
-    });
-
-    // Initial load if needed
-    if (_lastProcessedPage == null && currentPage > 0) {
-      Future.microtask(() => _handlePageChange(currentPage, settings));
-    }
+    final runtimeError = _runtimeErrorState;
 
     // Constraints for resizing
     final screenWidth = MediaQuery.of(context).size.width;
     final minWidth = screenWidth * 0.2;
     final maxWidth = screenWidth * 0.5;
 
-    return SlideTransition(
-      position: _slideAnimation,
+    return SizedBox.expand(
       child: Row(
-        mainAxisSize: MainAxisSize.min, // Important for right anchoring
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Resize Handle (Left Edge)
-          MouseRegion(
-            cursor: SystemMouseCursors.resizeLeftRight,
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragUpdate: (details) {
-                // Dragging left (negative dx) increases width
-                // Dragging right (positive dx) decreases width
-                final newWidth = panelWidth - details.delta.dx;
-                if (newWidth >= minWidth && newWidth <= maxWidth) {
-                  ref.read(aiPanelWidthProvider.notifier).setWidth(newWidth);
-                }
-              },
-              child: Container(
-                width: 8,
-                color: Colors.transparent, // Invisible handle area
-                child: VerticalDivider(
-                  width: 1,
-                  thickness: 1,
-                  color: theme.colorScheme.outlineVariant,
+          if (!widget.attachToLeft)
+            MouseRegion(
+              cursor: SystemMouseCursors.resizeLeftRight,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragUpdate: (details) {
+                  final newWidth = panelWidth - details.delta.dx;
+                  if (newWidth >= minWidth && newWidth <= maxWidth) {
+                    ref.read(aiPanelWidthProvider.notifier).setWidth(newWidth);
+                  }
+                },
+                child: Container(
+                  width: 8,
+                  color: Colors.transparent,
+                  child: VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // Main Panel Content
-          SizedBox(
-            width: panelWidth,
+          Expanded(
             child: Container(
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainer,
@@ -410,6 +529,49 @@ class _AiPanelState extends ConsumerState<AiPanel>
                         );
                         final pageData = pageDataAsync.value;
                         final displaySummary = pageData?.summary;
+
+                        if (_panelMode == _AiPanelMode.note) {
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  l10n.pageNote,
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  _isEditingNote
+                                      ? Icons.visibility
+                                      : Icons.edit_note,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  if (_isEditingNote) {
+                                    _noteFocusNode.unfocus();
+                                  } else {
+                                    _startEditingNote();
+                                  }
+                                },
+                                tooltip: _isEditingNote
+                                    ? l10n.previewNote
+                                    : l10n.editNote,
+                              ),
+                              const Gap(4),
+                              IconButton(
+                                icon: const Icon(Icons.auto_awesome, size: 20),
+                                onPressed: _togglePanelMode,
+                                tooltip: l10n.aiSummary,
+                              ),
+                              const Gap(4),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 20),
+                                onPressed: widget.onClose,
+                                tooltip: l10n.closePanel,
+                              ),
+                            ],
+                          );
+                        }
 
                         return Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -451,11 +613,21 @@ class _AiPanelState extends ConsumerState<AiPanel>
                                 const Gap(4),
                                 IconButton(
                                   icon: const Icon(Icons.refresh, size: 20),
-                                  onPressed: _isLoading
+                                  onPressed:
+                                      _isLoading || !aiAvailability.isAvailable
                                       ? null
                                       : () =>
                                             _refreshSummary(_displayPageIndex),
                                   tooltip: l10n.regenerateSummary,
+                                ),
+                                const Gap(4),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.note_alt_outlined,
+                                    size: 20,
+                                  ),
+                                  onPressed: _togglePanelMode,
+                                  tooltip: l10n.pageNote,
                                 ),
                                 const Gap(4),
                                 IconButton(
@@ -473,367 +645,679 @@ class _AiPanelState extends ConsumerState<AiPanel>
 
                   // 2. Content (Animated - Blur/Fade)
                   Expanded(
-                    child: RepaintBoundary(
-                      child: AnimatedBuilder(
-                        animation: _contentTransitionController,
-                        builder: (context, child) {
-                          // _contentFadeAnimation goes from 1.0 (Visible) to 0.0 (Hidden)
-                          final visibility = _contentFadeAnimation.value;
+                    child: AnimatedBuilder(
+                      animation: _contentTransitionController,
+                      builder: (context, child) {
+                        final transitionProgress = _contentTransitionController
+                            .value
+                            .clamp(0.0, 1.0);
+                        final transitionBlurSigma = transitionProgress * 8.0;
+                        final totalBlurSigma = transitionBlurSigma;
+                        final contentOpacity = (1 - transitionProgress).clamp(
+                          0.0,
+                          1.0,
+                        );
+                        final overlayOpacity = (transitionProgress * 0.24)
+                            .clamp(0.0, 1.0);
 
-                          // Optimization: If hidden, don't paint
-                          if (visibility <= 0) return const SizedBox();
-
-                          // Apply Blur and Opacity
-                          // Blur: 10.0 (Hidden) -> 0.0 (Visible)
-                          // Opacity: 0.0 (Hidden) -> 1.0 (Visible)
-                          final blur = (1.0 - visibility) * 10.0;
-                          final opacity = visibility.clamp(0.0, 1.0);
-
-                          Widget content = child!;
-                          if (blur > 0) {
-                            content = ImageFiltered(
-                              imageFilter: ui.ImageFilter.blur(
-                                sigmaX: blur,
-                                sigmaY: blur,
+                        return Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Opacity(
+                                opacity: contentOpacity,
+                                child: ImageFiltered(
+                                  imageFilter: ui.ImageFilter.blur(
+                                    sigmaX: totalBlurSigma,
+                                    sigmaY: totalBlurSigma,
+                                  ),
+                                  child: child,
+                                ),
                               ),
-                              child: content,
-                            );
-                          }
-
-                          return Opacity(opacity: opacity, child: content);
-                        },
-                        child: CustomScrollView(
-                          controller: _scrollController,
-                          slivers: [
-                            // 2.1 Summary Section (Always at top)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Consumer(
-                                  builder: (context, ref, _) {
-                                    final settings = ref.watch(
-                                      settingsProvider,
-                                    );
-                                    final pageDataAsync = ref.watch(
-                                      watchPageDataProvider((
-                                        bookId: widget.bookId,
-                                        pageIndex: _displayPageIndex,
-                                        profileId:
-                                            settings.selectedSummaryProfileId,
-                                      )),
-                                    );
-                                    final pageData = pageDataAsync.value;
-                                    final displaySummary = pageData?.summary;
-
-                                    return Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.surface,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: theme
-                                              .colorScheme
-                                              .outlineVariant
-                                              .withValues(alpha: 0.5),
-                                        ),
+                            ),
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeOutCubic,
+                                  opacity: overlayOpacity.clamp(0.0, 1.0),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          theme.colorScheme.surface.withValues(
+                                            alpha: 0.14,
+                                          ),
+                                          theme.colorScheme.surface.withValues(
+                                            alpha: 0.04,
+                                          ),
+                                          theme.colorScheme.surface.withValues(
+                                            alpha: 0.18,
+                                          ),
+                                        ],
+                                        stops: const [0.0, 0.48, 1.0],
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.auto_awesome,
-                                                size: 16,
-                                                color:
-                                                    theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                      child: RepaintBoundary(
+                        child: _panelMode == _AiPanelMode.note
+                            ? _buildNoteView(theme, l10n)
+                            : CustomScrollView(
+                                controller: _scrollController,
+                                slivers: [
+                                  // 2.1 Summary Section (Always at top)
+                                  SliverToBoxAdapter(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Consumer(
+                                        builder: (context, ref, _) {
+                                          final settings = ref.watch(
+                                            settingsProvider,
+                                          );
+                                          final pageDataAsync = ref.watch(
+                                            watchPageDataProvider((
+                                              bookId: widget.bookId,
+                                              pageIndex: _displayPageIndex,
+                                              profileId: settings
+                                                  .selectedSummaryProfileId,
+                                            )),
+                                          );
+                                          final pageData = pageDataAsync.value;
+                                          final displaySummary =
+                                              pageData?.summary;
+
+                                          return Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: theme
+                                                    .colorScheme
+                                                    .outlineVariant
+                                                    .withValues(alpha: 0.5),
                                               ),
-                                              const Gap(8),
-                                              Text(
-                                                l10n.aiSummary,
-                                                style: theme
-                                                    .textTheme
-                                                    .labelMedium
-                                                    ?.copyWith(
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.auto_awesome,
+                                                      size: 16,
                                                       color: theme
                                                           .colorScheme
                                                           .primary,
                                                     ),
-                                              ),
-                                              const Spacer(),
-                                              if (settings.enablePseudoKBMode)
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 6,
-                                                        vertical: 2,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: theme
-                                                        .colorScheme
-                                                        .secondaryContainer,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          4,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    l10n.multiPageContext,
-                                                    style: theme
-                                                        .textTheme
-                                                        .labelSmall
-                                                        ?.copyWith(
-                                                          fontSize: 10,
+                                                    const Gap(8),
+                                                    Text(
+                                                      l10n.aiSummary,
+                                                      style: theme
+                                                          .textTheme
+                                                          .labelMedium
+                                                          ?.copyWith(
+                                                            color: theme
+                                                                .colorScheme
+                                                                .primary,
+                                                          ),
+                                                    ),
+                                                    const Spacer(),
+                                                    if (settings
+                                                        .enablePseudoKBMode)
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 2,
+                                                            ),
+                                                        decoration: BoxDecoration(
                                                           color: theme
                                                               .colorScheme
-                                                              .onSecondaryContainer,
+                                                              .secondaryContainer,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                4,
+                                                              ),
                                                         ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                          const Gap(8),
-                                          // Priority 1: Loading (Show if loading AND no summary text yet)
-                                          if (_isLoading &&
-                                              (displaySummary == null ||
-                                                  displaySummary.isEmpty))
-                                            const Center(
-                                              child: Padding(
-                                                padding: EdgeInsets.all(8.0),
-                                                child:
-                                                    CircularProgressIndicator(),
-                                              ),
-                                            )
-                                          // Priority 2: Countdown (Show if NOT loading and no summary text yet)
-                                          // Ensure it shows when we are waiting (countdown running)
-                                          else if (displaySummary == null ||
-                                              displaySummary.isEmpty)
-                                            Center(
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(
-                                                  8.0,
-                                                ),
-                                                child: AnimatedBuilder(
-                                                  animation:
-                                                      _countdownController,
-                                                  builder: (context, child) {
-                                                    // Only show if we have a valid countdown value or it's animating
-                                                    // But we want it visible even at 0 if we are waiting for trigger?
-                                                    // No, usually it animates 0->1.
-                                                    // If value is 0 and not animating, maybe we shouldn't show it unless we want to show "ready"?
-                                                    // Let's show it if value > 0 or animating.
-                                                    if (_countdownController
-                                                                .value >
-                                                            0 ||
-                                                        _countdownController
-                                                            .isAnimating) {
-                                                      return CircularProgressIndicator(
-                                                        value:
-                                                            _countdownController
-                                                                .value,
-                                                        backgroundColor: theme
-                                                            .colorScheme
-                                                            .surfaceContainerHighest,
-                                                      );
-                                                    } else {
-                                                      // If not animating and 0, maybe just a placeholder or empty?
-                                                      // User said "circle disappeared". Maybe it's resetting too fast or not starting?
-                                                      // Let's ensure we show SOMETHING if no summary.
-                                                      return CircularProgressIndicator(
-                                                        value: 0,
-                                                        backgroundColor: theme
-                                                            .colorScheme
-                                                            .surfaceContainerHighest,
-                                                      );
-                                                    }
-                                                  },
-                                                ),
-                                              ),
-                                            )
-                                          // Priority 3: Content
-                                          else
-                                            StreamingTypewriterText(
-                                              key: ValueKey(
-                                                '${settings.selectedSummaryProfileId}_$_displayPageIndex',
-                                              ),
-                                              text: displaySummary,
-                                              speed: const Duration(
-                                                milliseconds: 20,
-                                              ),
-                                              isStreaming: _isLoading,
-                                            ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-
-                            // 2.2 Chat History
-                            Consumer(
-                              builder: (context, ref, _) {
-                                final settings = ref.watch(settingsProvider);
-                                final pageDataAsync = ref.watch(
-                                  watchPageDataProvider((
-                                    bookId: widget.bookId,
-                                    pageIndex: _displayPageIndex,
-                                    profileId:
-                                        settings.selectedSummaryProfileId,
-                                  )),
-                                );
-                                final pageData = pageDataAsync.value;
-                                if (pageData == null)
-                                  return const SliverToBoxAdapter(
-                                    child: SizedBox.shrink(),
-                                  );
-
-                                return Consumer(
-                                  builder: (context, ref, _) {
-                                    final messagesAsync = ref.watch(
-                                      watchMessagesProvider(pageData.id),
-                                    );
-                                    final messages = messagesAsync.value ?? [];
-
-                                    if (messages.isNotEmpty) {
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback(
-                                            (_) => _scrollToBottom(),
-                                          );
-                                    }
-
-                                    return SliverList(
-                                      delegate: SliverChildBuilderDelegate((
-                                        context,
-                                        index,
-                                      ) {
-                                        final msg = messages[index];
-                                        final isUser = msg.isUser;
-                                        final isStreaming =
-                                            !isUser &&
-                                            index == messages.length - 1 &&
-                                            _isLoading;
-
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 4,
-                                          ),
-                                          child: Align(
-                                            alignment: isUser
-                                                ? Alignment.centerRight
-                                                : Alignment.centerLeft,
-                                            child: Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: isUser
-                                                    ? theme
-                                                          .colorScheme
-                                                          .primaryContainer
-                                                    : theme
-                                                          .colorScheme
-                                                          .surfaceContainerHighest,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              constraints: BoxConstraints(
-                                                maxWidth: panelWidth * 0.85,
-                                              ),
-                                              child:
-                                                  (msg.text.isEmpty && !isUser)
-                                                  ? const TypingIndicator()
-                                                  : StreamingTypewriterText(
-                                                      text: msg.text,
-                                                      isStreaming: isStreaming,
-                                                      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                                                        p: theme.textTheme.bodyMedium?.copyWith(
-                                                          color: isUser
-                                                              ? theme
+                                                        child: Text(
+                                                          l10n.multiPageContext,
+                                                          style: theme
+                                                              .textTheme
+                                                              .labelSmall
+                                                              ?.copyWith(
+                                                                fontSize: 10,
+                                                                color: theme
                                                                     .colorScheme
-                                                                    .onPrimaryContainer
-                                                              : theme
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
-                                                          fontFamily:
-                                                              'Noto Serif SC', // Ensure Serif font as requested
+                                                                    .onSecondaryContainer,
+                                                              ),
                                                         ),
                                                       ),
+                                                  ],
+                                                ),
+                                                const Gap(8),
+                                                ClipRect(
+                                                  child: AnimatedSize(
+                                                    duration: const Duration(
+                                                      milliseconds: 240,
                                                     ),
+                                                    curve: Curves.easeOutCubic,
+                                                    alignment:
+                                                        Alignment.topCenter,
+                                                    child:
+                                                        !aiAvailability
+                                                            .isAvailable
+                                                        ? _AiUnavailableCard(
+                                                            title: l10n
+                                                                .aiServiceUnavailable,
+                                                            subtitle:
+                                                                aiAvailability
+                                                                    .subtitle,
+                                                          )
+                                                        : runtimeError != null
+                                                        ? _AiUnavailableCard(
+                                                            title: runtimeError
+                                                                .title,
+                                                            subtitle:
+                                                                runtimeError
+                                                                    .subtitle,
+                                                            icon: runtimeError
+                                                                .icon,
+                                                            extraMessage:
+                                                                runtimeError
+                                                                    .extraMessage,
+                                                            actionLabel:
+                                                                runtimeError
+                                                                    .showModelSettingsAction
+                                                                ? l10n.openModelSettings
+                                                                : null,
+                                                            onActionTap:
+                                                                runtimeError
+                                                                    .showModelSettingsAction
+                                                                ? _openModelSettings
+                                                                : null,
+                                                          )
+                                                        : (_isLoading &&
+                                                              (displaySummary ==
+                                                                      null ||
+                                                                  displaySummary
+                                                                      .isEmpty))
+                                                        ? const Center(
+                                                            child: Padding(
+                                                              padding:
+                                                                  EdgeInsets.all(
+                                                                    8.0,
+                                                                  ),
+                                                              child:
+                                                                  CircularProgressIndicator(),
+                                                            ),
+                                                          )
+                                                        : (displaySummary ==
+                                                                  null ||
+                                                              displaySummary
+                                                                  .isEmpty)
+                                                        ? Center(
+                                                            child: Padding(
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                    8.0,
+                                                                  ),
+                                                              child: AnimatedBuilder(
+                                                                animation:
+                                                                    _countdownController,
+                                                                builder: (context, child) {
+                                                                  if (_countdownController
+                                                                              .value >
+                                                                          0 ||
+                                                                      _countdownController
+                                                                          .isAnimating) {
+                                                                    return CircularProgressIndicator(
+                                                                      value: _countdownController
+                                                                          .value,
+                                                                      backgroundColor: theme
+                                                                          .colorScheme
+                                                                          .surfaceContainerHighest,
+                                                                    );
+                                                                  } else {
+                                                                    return CircularProgressIndicator(
+                                                                      value: 0,
+                                                                      backgroundColor: theme
+                                                                          .colorScheme
+                                                                          .surfaceContainerHighest,
+                                                                    );
+                                                                  }
+                                                                },
+                                                              ),
+                                                            ),
+                                                          )
+                                                        : StreamingTypewriterText(
+                                                            key: ValueKey(
+                                                              '${settings.selectedSummaryProfileId}_$_displayPageIndex',
+                                                            ),
+                                                            text:
+                                                                displaySummary,
+                                                            isStreaming: false,
+                                                            styleSheet:
+                                                                MarkdownStyleSheet.fromTheme(
+                                                                  theme,
+                                                                ),
+                                                          ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  Consumer(
+                                    builder: (context, ref, _) {
+                                      final settings = ref.watch(
+                                        settingsProvider,
+                                      );
+                                      final pageDataAsync = ref.watch(
+                                        watchPageDataProvider((
+                                          bookId: widget.bookId,
+                                          pageIndex: _displayPageIndex,
+                                          profileId:
+                                              settings.selectedSummaryProfileId,
+                                        )),
+                                      );
+                                      final pageData = pageDataAsync.value;
+                                      if (pageData == null) {
+                                        return const SliverToBoxAdapter(
+                                          child: SizedBox.shrink(),
                                         );
-                                      }, childCount: messages.length),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
+                                      }
 
-                            // Bottom padding
-                            const SliverToBoxAdapter(child: Gap(16)),
-                          ],
-                        ),
+                                      return Consumer(
+                                        builder: (context, ref, _) {
+                                          final messagesAsync = ref.watch(
+                                            watchMessagesProvider(pageData.id),
+                                          );
+                                          final messages =
+                                              messagesAsync.value ?? [];
+
+                                          return SliverList(
+                                            delegate: SliverChildBuilderDelegate((
+                                              context,
+                                              index,
+                                            ) {
+                                              final msg = messages[index];
+                                              final isUser = msg.isUser;
+                                              final isStreamingAssistantMessage =
+                                                  !isUser &&
+                                                  _isLoading &&
+                                                  _activeStreamingMessageId ==
+                                                      msg.id;
+                                              final isFailedAssistantMessage =
+                                                  !isUser &&
+                                                  !_isLoading &&
+                                                  _failedAssistantMessageId ==
+                                                      msg.id;
+                                              return Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 4,
+                                                    ),
+                                                child: Align(
+                                                  alignment: isUser
+                                                      ? Alignment.centerRight
+                                                      : Alignment.centerLeft,
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          12,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: isUser
+                                                          ? theme
+                                                                .colorScheme
+                                                                .primaryContainer
+                                                          : theme
+                                                                .colorScheme
+                                                                .surfaceContainerHighest,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    constraints: BoxConstraints(
+                                                      maxWidth:
+                                                          panelWidth * 0.85,
+                                                    ),
+                                                    child:
+                                                        (msg.text.isEmpty &&
+                                                            !isUser)
+                                                        ? _LoadingDotsIndicator(
+                                                            theme: theme,
+                                                          )
+                                                        : isStreamingAssistantMessage
+                                                        ? StreamingTypewriterText(
+                                                            text: msg.text,
+                                                            isStreaming: true,
+                                                            speed:
+                                                                const Duration(
+                                                                  milliseconds:
+                                                                      12,
+                                                                ),
+                                                            styleSheet:
+                                                                MarkdownStyleSheet.fromTheme(
+                                                                  theme,
+                                                                ).copyWith(
+                                                                  p: theme
+                                                                      .textTheme
+                                                                      .bodyMedium
+                                                                      ?.copyWith(
+                                                                        color: theme
+                                                                            .colorScheme
+                                                                            .onSurfaceVariant,
+                                                                        fontFamily:
+                                                                            'Noto Serif SC',
+                                                                      ),
+                                                                ),
+                                                          )
+                                                        : isFailedAssistantMessage
+                                                        ? Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            children: [
+                                                              MarkdownBody(
+                                                                data: msg.text,
+                                                                selectable:
+                                                                    true,
+                                                                styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                                                                  p: theme
+                                                                      .textTheme
+                                                                      .bodyMedium
+                                                                      ?.copyWith(
+                                                                        color: theme
+                                                                            .colorScheme
+                                                                            .onSurfaceVariant,
+                                                                        fontFamily:
+                                                                            'Noto Serif SC',
+                                                                      ),
+                                                                ),
+                                                              ),
+                                                              const Gap(8),
+                                                              Align(
+                                                                alignment: Alignment
+                                                                    .centerLeft,
+                                                                child: OutlinedButton.icon(
+                                                                  onPressed:
+                                                                      _isLoading
+                                                                      ? null
+                                                                      : () => _retryFailedChat(
+                                                                          msg.id,
+                                                                        ),
+                                                                  icon: const Icon(
+                                                                    Icons
+                                                                        .refresh_rounded,
+                                                                    size: 16,
+                                                                  ),
+                                                                  label:
+                                                                      const Text(
+                                                                        'Retry',
+                                                                      ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          )
+                                                        : MarkdownBody(
+                                                            data: msg.text,
+                                                            selectable: true,
+                                                            styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                                                              p: theme
+                                                                  .textTheme
+                                                                  .bodyMedium
+                                                                  ?.copyWith(
+                                                                    color:
+                                                                        isUser
+                                                                        ? theme
+                                                                              .colorScheme
+                                                                              .onPrimaryContainer
+                                                                        : theme
+                                                                              .colorScheme
+                                                                              .onSurfaceVariant,
+                                                                    fontFamily:
+                                                                        'Noto Serif SC',
+                                                                  ),
+                                                            ),
+                                                          ),
+                                                  ),
+                                                ),
+                                              );
+                                            }, childCount: messages.length),
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                  const SliverToBoxAdapter(child: Gap(16)),
+                                ],
+                              ),
                       ),
                     ),
                   ),
 
-                  Divider(height: 1, color: theme.colorScheme.outlineVariant),
-
-                  // 3. Input Area (Static)
-                  Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _chatController,
-                            decoration: InputDecoration(
-                              hintText: l10n.enterMessage,
-                              border: const OutlineInputBorder(),
-                              filled: true,
-                              fillColor: theme.colorScheme.surface,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
+                  if (_panelMode == _AiPanelMode.assistant) ...[
+                    Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 52,
+                              child: TextField(
+                                controller: _chatController,
+                                enabled: aiAvailability.isAvailable,
+                                decoration: InputDecoration(
+                                  hintText: aiAvailability.isAvailable
+                                      ? l10n.enterMessage
+                                      : aiAvailability.subtitle,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  disabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor: theme
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.46),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
+                                  isDense: true,
+                                ),
+                                onSubmitted: (value) => _sendMessage(value),
                               ),
-                              isDense: true,
                             ),
-                            onSubmitted: (value) => _sendMessage(value),
                           ),
-                        ),
-                        const Gap(8),
-                        IconButton.filled(
-                          icon: const Icon(Icons.send),
-                          onPressed: _isLoading
-                              ? null
-                              : () => _sendMessage(_chatController.text),
-                        ),
-                      ],
+                          const Gap(8),
+                          SizedBox(
+                            width: 52,
+                            height: 52,
+                            child: IconButton.filled(
+                              icon: const Icon(Icons.send),
+                              onPressed:
+                                  _isLoading || !aiAvailability.isAvailable
+                                  ? null
+                                  : () => _sendMessage(_chatController.text),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
           ),
+
+          if (widget.attachToLeft)
+            MouseRegion(
+              cursor: SystemMouseCursors.resizeLeftRight,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragUpdate: (details) {
+                  final newWidth = panelWidth + details.delta.dx;
+                  if (newWidth >= minWidth && newWidth <= maxWidth) {
+                    ref.read(aiPanelWidthProvider.notifier).setWidth(newWidth);
+                  }
+                },
+                child: Container(
+                  width: 8,
+                  color: Colors.transparent,
+                  child: VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+                ),
+              ),
+            ),
         ],
-      ), // End Row
-    ); // End SlideTransition
+      ),
+    );
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+  Widget _buildNoteView(ThemeData theme, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Consumer(
+            builder: (context, ref, _) {
+              final noteAsync = ref.watch(
+                watchPageNoteProvider((
+                  bookId: widget.bookId,
+                  pageIndex: _displayPageIndex,
+                )),
+              );
+              final note = noteAsync.value ?? _noteController.text;
+              if (!_noteFocusNode.hasFocus && _noteController.text != note) {
+                _noteController.text = note;
+              }
+
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: constraints.maxWidth,
+                  maxWidth: constraints.maxWidth,
+                  minHeight: constraints.maxHeight,
+                  maxHeight: constraints.maxHeight,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: _isEditingNote
+                      ? Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Scrollbar(
+                            child: SingleChildScrollView(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: constraints.maxHeight - 32,
+                                ),
+                                child: TextField(
+                                  controller: _noteController,
+                                  focusNode: _noteFocusNode,
+                                  maxLines: null,
+                                  minLines: 12,
+                                  maxLength: 20000,
+                                  decoration: InputDecoration(
+                                    hintText: l10n.pageNoteHint,
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: _startEditingNote,
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: note.trim().isEmpty
+                                ? Text(
+                                    l10n.pageNoteEmpty,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  )
+                                : MarkdownBody(
+                                    data: note,
+                                    selectable: true,
+                                    styleSheet: MarkdownStyleSheet.fromTheme(
+                                      theme,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   void _handlePageChange(int pageIndex, SettingsModel settings) {
+    unawaited(
+      DebugLogService.debug(
+        source: 'AI_PANEL',
+        message: 'Handling AI panel page change.',
+        context: {
+          'bookId': widget.bookId,
+          'fromPageIndex': _displayPageIndex,
+          'toPageIndex': pageIndex,
+          'profileId': settings.selectedSummaryProfileId,
+        },
+      ),
+    );
     // 1. Immediate Cleanup
     _aiSubscription?.cancel();
+    _activeStreamingMessageId = null;
+    _failedAssistantMessageId = null;
+    _failedUserPrompt = null;
+    _failedPageIndex = null;
+    _failedProfileId = null;
     _countdownController.stop();
 
     // Check if the current page OR the next page has data
@@ -880,7 +1364,7 @@ class _AiPanelState extends ConsumerState<AiPanel>
     }
   }
 
-  Future<String?> _captureScreenshotBase64() async {
+  Future<Uint8List?> _captureScreenshotBytes() async {
     if (widget.pdfKey.currentContext == null) return null;
 
     try {
@@ -896,21 +1380,32 @@ class _AiPanelState extends ConsumerState<AiPanel>
       );
 
       if (byteData != null) {
-        return base64Encode(byteData.buffer.asUint8List());
+        return byteData.buffer.asUint8List();
       }
-    } catch (e) {
-      debugPrint("Error capturing screenshot: $e");
+    } catch (e, stackTrace) {
+      unawaited(
+        DebugLogService.warn(
+          source: 'AI_PANEL',
+          message: 'Failed to capture current PDF screenshot for chat.',
+          error: e,
+          stackTrace: stackTrace,
+          context: {
+            'bookId': widget.bookId,
+            'pageIndex': ref.read(currentPageProvider),
+          },
+        ),
+      );
     }
     return null;
   }
 
   // Render previous pages for enhanced context (PseudoKB Mode)
-  Future<List<String>> _renderContextPages(int pageIndex) async {
+  Future<List<Uint8List>> _renderContextPages(int pageIndex) async {
     final settings = ref.read(settingsProvider);
     if (!settings.enablePseudoKBMode || widget.pdfDocument == null) return [];
 
     final doc = widget.pdfDocument as PdfDocument;
-    final contextImages = <String>[];
+    final contextImages = <Uint8List>[];
     final pagesToRender = <int>[];
 
     // Add previous 2 pages if available
@@ -933,11 +1428,23 @@ class _AiPanelState extends ConsumerState<AiPanel>
               format: ui.ImageByteFormat.png,
             );
             if (byteData != null) {
-              contextImages.add(base64Encode(byteData.buffer.asUint8List()));
+              contextImages.add(byteData.buffer.asUint8List());
             }
           }
-        } catch (e) {
-          debugPrint('Error rendering context page $pNum: $e');
+        } catch (e, stackTrace) {
+          unawaited(
+            DebugLogService.warn(
+              source: 'AI_PANEL',
+              message: 'Failed to render context page for chat.',
+              error: e,
+              stackTrace: stackTrace,
+              context: {
+                'bookId': widget.bookId,
+                'pageIndex': pageIndex,
+                'contextPageIndex': pNum,
+              },
+            ),
+          );
         }
       }
     }
@@ -952,27 +1459,110 @@ class _AiPanelState extends ConsumerState<AiPanel>
   // Let's make _refreshSummary use the service too.
 
   Future<void> _refreshSummary(int pageIndex) async {
+    final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).languageCode;
+    await DebugLogService.info(
+      source: 'AI_PANEL',
+      message: 'Manual summary refresh requested.',
+      context: {
+        'bookId': widget.bookId,
+        'pageIndex': pageIndex,
+        'profileId': ref.read(settingsProvider).selectedSummaryProfileId,
+      },
+    );
     _countdownController.stop();
     setState(() {
       _isLoading = true;
+      _runtimeErrorState = null;
     });
     final settings = ref.read(settingsProvider);
     final profileId = settings.selectedSummaryProfileId;
 
-    if (widget.pdfDocument != null) {
-      ref
-          .read(pageRepositoryProvider)
-          .savePageSummary(widget.bookId, pageIndex, profileId, "", null);
+    try {
+      if (widget.pdfDocument != null) {
+        ref
+            .read(pageRepositoryProvider)
+            .savePageSummary(widget.bookId, pageIndex, profileId, "", null);
 
-      await ref
-          .read(summaryGenerationServiceProvider)
-          .ensureSummary(
-            widget.bookId,
-            pageIndex,
-            profileId,
-            widget.pdfDocument,
-            locale: Localizations.localeOf(context).languageCode,
+        await ref
+            .read(summaryGenerationServiceProvider)
+            .ensureSummary(
+              widget.bookId,
+              pageIndex,
+              profileId,
+              widget.pdfDocument,
+              locale: locale,
+              force: true,
+            );
+      }
+    } catch (error, stackTrace) {
+      final uiError = _classifyAiPanelError(
+        l10n: l10n,
+        error: error,
+        settings: settings,
+      );
+      final shouldRetrySilently =
+          uiError.kind == _AiPanelErrorKind.modelUnavailable;
+      if (shouldRetrySilently) {
+        try {
+          await ref
+              .read(summaryGenerationServiceProvider)
+              .ensureSummary(
+                widget.bookId,
+                pageIndex,
+                profileId,
+                widget.pdfDocument,
+                locale: locale,
+                force: true,
+              );
+          if (mounted) {
+            setState(() {
+              _runtimeErrorState = null;
+            });
+          }
+          return;
+        } catch (retryError, retryStackTrace) {
+          await DebugLogService.error(
+            source: 'AI_PANEL',
+            message: 'Manual summary refresh failed after retry.',
+            error: retryError,
+            stackTrace: retryStackTrace,
+            context: {
+              'bookId': widget.bookId,
+              'pageIndex': pageIndex,
+              'profileId': profileId,
+            },
           );
+          if (mounted) {
+            final retryUiError = _classifyAiPanelError(
+              l10n: l10n,
+              error: retryError,
+              settings: settings,
+            );
+            setState(() {
+              _runtimeErrorState = retryUiError;
+            });
+          }
+          return;
+        }
+      }
+
+      await DebugLogService.error(
+        source: 'AI_PANEL',
+        message: 'Manual summary refresh failed.',
+        error: error,
+        stackTrace: stackTrace,
+        context: {
+          'bookId': widget.bookId,
+          'pageIndex': pageIndex,
+          'profileId': profileId,
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _runtimeErrorState = uiError;
+        });
+      }
     }
 
     if (mounted) {
@@ -990,6 +1580,39 @@ class _AiPanelState extends ConsumerState<AiPanel>
     final profileId = ref.read(settingsProvider).selectedSummaryProfileId;
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toString();
+    final authState = ref.read(authControllerProvider);
+    final clientConfigAsync = ref.read(clientConfigProvider);
+    final clientConfig = clientConfigAsync.maybeWhen(
+      data: (value) => value,
+      orElse: () => null,
+    );
+    final clientConfigError = clientConfigAsync.hasError
+        ? clientConfigAsync.error
+        : null;
+    final availability = _resolveAiAvailability(
+      settings: ref.read(settingsProvider),
+      authState: authState,
+      clientConfig: clientConfig,
+      clientConfigError: clientConfigError,
+      l10n: l10n,
+    );
+    if (!availability.isAvailable) {
+      await DebugLogService.warn(
+        source: 'AI_PANEL',
+        message: 'Chat request blocked because AI service is unavailable.',
+        context: {
+          'bookId': widget.bookId,
+          'pageIndex': pageIndex,
+          'profileId': profileId,
+          'subtitle': availability.subtitle,
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(availability.subtitle)));
+      return;
+    }
 
     // Ensure PageData exists
     var pageData = repo.getPageData(widget.bookId, pageIndex, profileId);
@@ -1000,38 +1623,65 @@ class _AiPanelState extends ConsumerState<AiPanel>
 
     if (pageData == null) return;
 
-    repo.addMessage(pageData.id, text, true);
+    final userMessageId = repo.addMessage(pageData.id, text, true);
     _chatController.clear();
+    _ensureChatScrollToBottom();
 
     // Cancel previous AI action
     _aiSubscription?.cancel();
+    _activeStreamingMessageId = null;
 
     setState(() {
       _isLoading = true;
+      _runtimeErrorState = null;
+      _failedAssistantMessageId = null;
+      _failedUserPrompt = null;
+      _failedPageIndex = null;
+      _failedProfileId = null;
     });
 
-    final base64Image = await _captureScreenshotBase64();
-    if (base64Image == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
-    // Get context pages if enabled
-    final contextImages = await _renderContextPages(pageIndex);
-    // Combine context + current page (screenshot)
-    final allImages = [...contextImages, base64Image];
-
-    final history = repo.getRecentMessages(pageData.id);
+    final history = repo
+        .getRecentMessages(pageData.id)
+        .where((message) => message.id != userMessageId)
+        .toList();
     final aiService = ref.read(aiServiceProvider);
+    final settings = ref.read(settingsProvider);
     final StringBuffer responseBuffer = StringBuffer();
+
+    await DebugLogService.info(
+      source: 'AI_PANEL',
+      message: 'Dispatching chat request from AI panel.',
+      context: {
+        'bookId': widget.bookId,
+        'pageIndex': pageIndex,
+        'profileId': profileId,
+        'pageDataId': pageData.id,
+        'historyCount': history.length,
+        'promptLength': text.length,
+        'hasSummary': pageData.summary != null && pageData.summary!.isNotEmpty,
+        'enablePseudoKbMode': settings.enablePseudoKBMode,
+      },
+    );
 
     // Add temporary AI loading message
     final loadingMsgId = repo.addMessage(pageData.id, "", false);
+    _activeStreamingMessageId = loadingMsgId;
+    _ensureChatScrollToBottom();
 
     try {
+      final screenshotBytes = await _captureScreenshotBytes();
+      if (screenshotBytes == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+      final contextImages = await _renderContextPages(pageIndex);
+      final allImages = <AiImageInput>[
+        ...contextImages.map(AiImageInput.bytes),
+        AiImageInput.bytes(screenshotBytes),
+      ];
       final stream = aiService.chatWithPage(
         prompt: text,
-        base64Images: allImages,
+        images: allImages,
         summary: pageData.summary,
         history: history,
         locale: locale,
@@ -1042,24 +1692,284 @@ class _AiPanelState extends ConsumerState<AiPanel>
           responseBuffer.write(chunk);
           // Update message content in real-time
           repo.updateMessage(loadingMsgId, responseBuffer.toString());
+          _ensureChatScrollToBottom(immediate: true);
         },
         onDone: () {
+          unawaited(
+            DebugLogService.info(
+              source: 'AI_PANEL',
+              message: 'Chat request completed.',
+              context: {
+                'bookId': widget.bookId,
+                'pageIndex': pageIndex,
+                'profileId': profileId,
+                'responseLength': responseBuffer.length,
+              },
+            ),
+          );
           if (!mounted) return;
-          setState(() => _isLoading = false);
+          setState(() {
+            _isLoading = false;
+            _activeStreamingMessageId = null;
+            _failedAssistantMessageId = null;
+            _failedUserPrompt = null;
+            _failedPageIndex = null;
+            _failedProfileId = null;
+            _runtimeErrorState = null;
+          });
+          _ensureChatScrollToBottom();
         },
         onError: (e) {
+          unawaited(
+            DebugLogService.error(
+              source: 'AI_PANEL',
+              message: 'Chat stream failed.',
+              error: e,
+              context: {
+                'bookId': widget.bookId,
+                'pageIndex': pageIndex,
+                'profileId': profileId,
+                'responseLength': responseBuffer.length,
+              },
+            ),
+          );
           if (!mounted) return;
-          repo.updateMessage(loadingMsgId, "${l10n.errorPrefix}$e");
-          setState(() => _isLoading = false);
+          final runtimeError = _classifyAiPanelError(
+            l10n: l10n,
+            error: e,
+            settings: ref.read(settingsProvider),
+          );
+          repo.updateMessage(loadingMsgId, runtimeError.subtitle);
+          setState(() {
+            _isLoading = false;
+            _activeStreamingMessageId = null;
+            _failedAssistantMessageId = loadingMsgId;
+            _failedUserPrompt = text;
+            _failedPageIndex = pageIndex;
+            _failedProfileId = profileId;
+            _runtimeErrorState = null;
+          });
+          _ensureChatScrollToBottom();
         },
         cancelOnError: true,
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      await DebugLogService.error(
+        source: 'AI_PANEL',
+        message: 'Chat request failed before stream subscription.',
+        error: e,
+        stackTrace: stackTrace,
+        context: {
+          'bookId': widget.bookId,
+          'pageIndex': pageIndex,
+          'profileId': profileId,
+        },
+      );
       if (mounted) {
-        repo.updateMessage(loadingMsgId, "${l10n.errorPrefix}$e");
-        setState(() => _isLoading = false);
+        final runtimeError = _classifyAiPanelError(
+          l10n: l10n,
+          error: e,
+          settings: ref.read(settingsProvider),
+        );
+        repo.updateMessage(loadingMsgId, runtimeError.subtitle);
+        setState(() {
+          _isLoading = false;
+          _activeStreamingMessageId = null;
+          _failedAssistantMessageId = loadingMsgId;
+          _failedUserPrompt = text;
+          _failedPageIndex = pageIndex;
+          _failedProfileId = profileId;
+          _runtimeErrorState = null;
+        });
+        _ensureChatScrollToBottom();
       }
     }
+  }
+
+  Future<void> _retryFailedChat(int failedMessageId) async {
+    if (_isLoading) return;
+    final retryPrompt = _failedUserPrompt;
+    final retryPageIndex = _failedPageIndex;
+    final retryProfileId = _failedProfileId;
+    if (retryPrompt == null ||
+        retryPrompt.trim().isEmpty ||
+        retryPageIndex == null ||
+        retryProfileId == null) {
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).toString();
+    final pageIndex = ref.read(currentPageProvider);
+    if (pageIndex != retryPageIndex) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please return to the original page first.'),
+        ),
+      );
+      return;
+    }
+
+    final authState = ref.read(authControllerProvider);
+    final clientConfigAsync = ref.read(clientConfigProvider);
+    final clientConfig = clientConfigAsync.maybeWhen(
+      data: (value) => value,
+      orElse: () => null,
+    );
+    final clientConfigError = clientConfigAsync.hasError
+        ? clientConfigAsync.error
+        : null;
+    final availability = _resolveAiAvailability(
+      settings: ref.read(settingsProvider),
+      authState: authState,
+      clientConfig: clientConfig,
+      clientConfigError: clientConfigError,
+      l10n: l10n,
+    );
+    if (!availability.isAvailable) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(availability.subtitle)));
+      return;
+    }
+
+    final repo = ref.read(pageRepositoryProvider);
+    final pageData = repo.getPageData(
+      widget.bookId,
+      retryPageIndex,
+      retryProfileId,
+    );
+    if (pageData == null) return;
+
+    _aiSubscription?.cancel();
+    _activeStreamingMessageId = null;
+
+    setState(() {
+      _isLoading = true;
+      _runtimeErrorState = null;
+      _activeStreamingMessageId = failedMessageId;
+    });
+    _ensureChatScrollToBottom();
+
+    final history = repo
+        .getRecentMessages(pageData.id)
+        .where((message) => message.id != failedMessageId)
+        .toList();
+    final aiService = ref.read(aiServiceProvider);
+    final responseBuffer = StringBuffer();
+    repo.updateMessage(failedMessageId, '');
+    _ensureChatScrollToBottom();
+
+    try {
+      final screenshotBytes = await _captureScreenshotBytes();
+      if (screenshotBytes == null) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _activeStreamingMessageId = null;
+          });
+        }
+        return;
+      }
+      final contextImages = await _renderContextPages(retryPageIndex);
+      final allImages = <AiImageInput>[
+        ...contextImages.map(AiImageInput.bytes),
+        AiImageInput.bytes(screenshotBytes),
+      ];
+      final stream = aiService.chatWithPage(
+        prompt: retryPrompt,
+        images: allImages,
+        summary: pageData.summary,
+        history: history,
+        locale: locale,
+      );
+
+      _aiSubscription = stream.listen(
+        (chunk) {
+          responseBuffer.write(chunk);
+          repo.updateMessage(failedMessageId, responseBuffer.toString());
+          _ensureChatScrollToBottom(immediate: true);
+        },
+        onDone: () {
+          if (!mounted) return;
+          setState(() {
+            _isLoading = false;
+            _activeStreamingMessageId = null;
+            _failedAssistantMessageId = null;
+            _failedUserPrompt = null;
+            _failedPageIndex = null;
+            _failedProfileId = null;
+          });
+          _ensureChatScrollToBottom();
+        },
+        onError: (error) {
+          if (!mounted) return;
+          final runtimeError = _classifyAiPanelError(
+            l10n: l10n,
+            error: error,
+            settings: ref.read(settingsProvider),
+          );
+          repo.updateMessage(failedMessageId, runtimeError.subtitle);
+          setState(() {
+            _isLoading = false;
+            _activeStreamingMessageId = null;
+            _failedAssistantMessageId = failedMessageId;
+            _failedUserPrompt = retryPrompt;
+            _failedPageIndex = retryPageIndex;
+            _failedProfileId = retryProfileId;
+          });
+          _ensureChatScrollToBottom();
+        },
+        cancelOnError: true,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final runtimeError = _classifyAiPanelError(
+        l10n: l10n,
+        error: error,
+        settings: ref.read(settingsProvider),
+      );
+      repo.updateMessage(failedMessageId, runtimeError.subtitle);
+      setState(() {
+        _isLoading = false;
+        _activeStreamingMessageId = null;
+        _failedAssistantMessageId = failedMessageId;
+        _failedUserPrompt = retryPrompt;
+        _failedPageIndex = retryPageIndex;
+        _failedProfileId = retryProfileId;
+      });
+      _ensureChatScrollToBottom();
+    }
+  }
+
+  void _ensureChatScrollToBottom({bool immediate = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = _scrollController.position.maxScrollExtent;
+      if (immediate) {
+        _scrollController.jumpTo(target);
+        return;
+      }
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _openModelSettings() {
+    final l10n = AppLocalizations.of(context)!;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(l10n.settings)),
+          body: const SettingsScreen(openAiConfigurationOnStart: true),
+        ),
+      ),
+    );
   }
 
   void _copyToClipboard(String text) {
@@ -1068,4 +1978,290 @@ class _AiPanelState extends ConsumerState<AiPanel>
       context,
     ).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
   }
+}
+
+class _LoadingDotsIndicator extends StatefulWidget {
+  const _LoadingDotsIndicator({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  State<_LoadingDotsIndicator> createState() => _LoadingDotsIndicatorState();
+}
+
+class _LoadingDotsIndicatorState extends State<_LoadingDotsIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 34,
+      height: 16,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              3,
+              (index) {
+                final phase = (_controller.value + index * 0.2) % 1.0;
+                final pulse = (1 - (phase - 0.5).abs() * 2).clamp(0.0, 1.0);
+                final dotColor = Color.lerp(
+                  Colors.black.withValues(alpha: 0.45),
+                  widget.theme.colorScheme.primary.withValues(alpha: 0.95),
+                  pulse,
+                )!;
+                return Transform.translate(
+                  offset: Offset(0, -2.5 * pulse),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          dotColor.withValues(alpha: 0.92),
+                          dotColor.withValues(alpha: 0.58),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ).expand((dot) => [dot, const SizedBox(width: 3)]).take(5).toList(),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AiUnavailableCard extends StatelessWidget {
+  const _AiUnavailableCard({
+    required this.title,
+    required this.subtitle,
+    this.icon = Icons.error_outline,
+    this.extraMessage,
+    this.actionLabel,
+    this.onActionTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String? extraMessage;
+  final String? actionLabel;
+  final VoidCallback? onActionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: theme.colorScheme.primary),
+              const Gap(10),
+              Expanded(child: Text(title, style: theme.textTheme.titleMedium)),
+            ],
+          ),
+          const Gap(6),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (extraMessage != null && extraMessage!.isNotEmpty) ...[
+            const Gap(8),
+            Text(
+              extraMessage!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (actionLabel != null && onActionTap != null) ...[
+            const Gap(12),
+            FilledButton.icon(
+              onPressed: onActionTap,
+              icon: const Icon(Icons.tune),
+              label: Text(actionLabel!),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+enum _AiPanelErrorKind {
+  quotaExceeded,
+  networkUnavailable,
+  modelUnavailable,
+  signInRequired,
+}
+
+class _AiPanelErrorState {
+  const _AiPanelErrorState({
+    required this.kind,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.showModelSettingsAction,
+    this.extraMessage,
+  });
+
+  final _AiPanelErrorKind kind;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool showModelSettingsAction;
+  final String? extraMessage;
+}
+
+class _AiAvailabilityState {
+  const _AiAvailabilityState({
+    required this.isAvailable,
+    required this.subtitle,
+  });
+
+  final bool isAvailable;
+  final String subtitle;
+}
+
+_AiAvailabilityState _resolveAiAvailability({
+  required SettingsModel settings,
+  required AuthState authState,
+  required ClientConfigSummary? clientConfig,
+  required Object? clientConfigError,
+  required AppLocalizations l10n,
+}) {
+  if (!settings.useCustomModelConfig) {
+    if (!authState.isAuthenticated) {
+      return _AiAvailabilityState(
+        isAvailable: false,
+        subtitle: l10n.aiServiceSignInRequiredSubtitle,
+      );
+    }
+
+    if (clientConfigError != null && _isLikelyNetworkError(clientConfigError)) {
+      return _AiAvailabilityState(
+        isAvailable: false,
+        subtitle: l10n.aiNetworkUnavailableSubtitle,
+      );
+    }
+
+    final availableModels = clientConfig?.availableModels ?? const <String>[];
+    if (availableModels.isEmpty ||
+        !availableModels.contains(settings.selectedServerModelName)) {
+      return _AiAvailabilityState(
+        isAvailable: false,
+        subtitle: l10n.aiServiceUnavailableSubtitle,
+      );
+    }
+
+    return _AiAvailabilityState(isAvailable: true, subtitle: '');
+  }
+
+  final isConfigured =
+      settings.baseUrl.trim().isNotEmpty &&
+      settings.apiKey.trim().isNotEmpty &&
+      settings.modelName.trim().isNotEmpty;
+  return _AiAvailabilityState(
+    isAvailable: isConfigured,
+    subtitle: isConfigured ? '' : l10n.aiServiceUnavailableSubtitle,
+  );
+}
+
+_AiPanelErrorState _classifyAiPanelError({
+  required AppLocalizations l10n,
+  required Object error,
+  required SettingsModel settings,
+}) {
+  final raw = error.toString().toLowerCase();
+  final code = error is AiServiceException ? error.code : raw;
+
+  if (_isLikelyNetworkError(error)) {
+    return _AiPanelErrorState(
+      kind: _AiPanelErrorKind.networkUnavailable,
+      title: l10n.aiNetworkUnavailableTitle,
+      subtitle: l10n.aiNetworkUnavailableSubtitle,
+      icon: Icons.wifi_off_rounded,
+      showModelSettingsAction: false,
+    );
+  }
+
+  if (code.contains('daily_quota_exceeded')) {
+    return _AiPanelErrorState(
+      kind: _AiPanelErrorKind.quotaExceeded,
+      title: l10n.aiQuotaExceededTitle,
+      subtitle: l10n.aiQuotaExceededSubtitle,
+      icon: Icons.hourglass_top_rounded,
+      showModelSettingsAction: false,
+    );
+  }
+
+  if (code.contains('sign_in_required') || raw.contains('please sign in')) {
+    return _AiPanelErrorState(
+      kind: _AiPanelErrorKind.signInRequired,
+      title: l10n.aiServiceUnavailable,
+      subtitle: l10n.aiServiceSignInRequiredSubtitle,
+      icon: Icons.login_rounded,
+      showModelSettingsAction: false,
+    );
+  }
+
+  return _AiPanelErrorState(
+    kind: _AiPanelErrorKind.modelUnavailable,
+    title: l10n.aiModelUnavailableTitle,
+    subtitle: l10n.aiModelUnavailableSubtitle,
+    icon: Icons.cloud_off_rounded,
+    showModelSettingsAction: true,
+    extraMessage: settings.useCustomModelConfig ? l10n.aiCustomModelHint : null,
+  );
+}
+
+bool _isLikelyNetworkError(Object error) {
+  final raw = error.toString().toLowerCase();
+  return error is SocketException ||
+      error is TimeoutException ||
+      (error is DioException &&
+          (error.type == DioExceptionType.connectionError ||
+              error.type == DioExceptionType.connectionTimeout ||
+              error.type == DioExceptionType.receiveTimeout ||
+              error.type == DioExceptionType.sendTimeout)) ||
+      raw.contains('socketexception') ||
+      raw.contains('connection refused') ||
+      raw.contains('failed host lookup') ||
+      raw.contains('network is unreachable') ||
+      raw.contains('connection error') ||
+      raw.contains('timed out');
 }
