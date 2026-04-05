@@ -44,3 +44,9 @@ app.*.map.json
 **/android/app/debug
 **/android/app/profile
 **/android/app/release
+
+# Local/generated artifacts that should never be versioned
+macos/Pods/
+ios/Runner.xcworkspace/xcuserdata/
+release_artifacts/
+tmp_model_matrix/

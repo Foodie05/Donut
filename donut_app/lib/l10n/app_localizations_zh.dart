@@ -121,10 +121,108 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiConfiguration => 'AI 配置';
 
   @override
-  String get aiCategorySubtitle => '配置模型、接口地址、密钥和回复长度';
+  String get aiCategorySubtitle => '配置模型来源、回复长度和自定义连接';
 
   @override
   String get apiBaseUrl => 'API 基础地址';
+
+  @override
+  String get serverModelSelection => '服务器模型';
+
+  @override
+  String get serverModelSelectionSubtitle => '登录后可使用服务器提供的模型';
+
+  @override
+  String get customModelOption => '自定义';
+
+  @override
+  String get customModelOptionSubtitle => '使用你自己的模型服务连接';
+
+  @override
+  String get loginForAiService => '请登录以获得AI服务';
+
+  @override
+  String get loginForAiServiceSubtitle => '登录后即可使用服务器提供的模型';
+
+  @override
+  String get recommendedModelTag => '推荐';
+
+  @override
+  String get customConnectionTitle => '自定义连接';
+
+  @override
+  String get testConnection => '测试连接';
+
+  @override
+  String get testingConnection => '测试连接中...';
+
+  @override
+  String testConnectionSuccess(Object count) {
+    return '连接成功，已获取 $count 个模型。';
+  }
+
+  @override
+  String get testConnectionFailed => '连接失败，请检查 Base URL 和 API Key。';
+
+  @override
+  String get customConnectionHint => '启用自定义后，将直接使用你填写的 Base URL、模型和 API Key。';
+
+  @override
+  String get serverModelsUnavailable => '服务器当前没有可用模型，请联系管理员。';
+
+  @override
+  String get aiServiceUnavailable => 'AI服务暂不可用';
+
+  @override
+  String get aiServiceUnavailableSubtitle => '请选择有效的配置';
+
+  @override
+  String get aiServiceSignInRequiredSubtitle => '请登录账号以享受服务';
+
+  @override
+  String get aiUnknownError => '发生未知错误';
+
+  @override
+  String get aiUnknownErrorSubtitle => '请尝试更换模型或联系开发者';
+
+  @override
+  String get aiQuotaExceededTitle => '今日额度已用完';
+
+  @override
+  String get aiQuotaExceededSubtitle => '您已经用完了今天的用量。稍后我们会提供更顺畅的服务，敬请期待！';
+
+  @override
+  String get aiModelUnavailableTitle => '模型暂不可用';
+
+  @override
+  String get aiModelUnavailableSubtitle => '模型暂不可用，请尝试使用其他模型或联系开发者';
+
+  @override
+  String get aiCustomModelHint => '您正在使用自定义模型，切换到Donut提供的模型以获得更稳定的体验。';
+
+  @override
+  String get aiNetworkUnavailableTitle => '网络无法连接';
+
+  @override
+  String get aiNetworkUnavailableSubtitle => '网络无法连接，请检查您的网络';
+
+  @override
+  String get openModelSettings => '前往模型配置';
+
+  @override
+  String get pageNote => '笔记';
+
+  @override
+  String get pageNoteHint => '在这里记录这一页的笔记，支持 Markdown。';
+
+  @override
+  String get pageNoteEmpty => '这一页还没有笔记，点击这里开始编辑。';
+
+  @override
+  String get editNote => '编辑笔记';
+
+  @override
+  String get previewNote => '预览笔记';
 
   @override
   String get modelReplyLength => '模型回复长度';
@@ -247,6 +345,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get powerSavingModeSubtitle => 'AI 面板关闭时，不启动新的摘要任务和倒计时';
+
+  @override
+  String get swapReaderPanels => '对调左右栏';
+
+  @override
+  String get swapReaderPanelsSubtitle => '交换缩略图栏与 AI 栏的位置';
 
   @override
   String get summaryProfiles => '摘要配置文件';
@@ -426,4 +530,211 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get restore => '恢复';
+
+  @override
+  String get account => '账户';
+
+  @override
+  String get accountCategorySubtitle => '查看登录状态和当前会话信息';
+
+  @override
+  String get signInTitle => '登录到Donut';
+
+  @override
+  String get signInSubtitle => '登录到Donut以享受完整体验';
+
+  @override
+  String get sessionActive => '会话已生效';
+
+  @override
+  String sessionExpiresAt(Object time) {
+    return '会话将于 $time 过期';
+  }
+
+  @override
+  String get waitingForBrowserSignIn => '正在等待浏览器完成登录...';
+
+  @override
+  String get signOut => '退出登录';
+
+  @override
+  String get authenticatedStatus => '已登录';
+
+  @override
+  String get dailyQuotaLabel => '今日额度';
+
+  @override
+  String dailyQuotaUsage(Object used, Object limit) {
+    return '$used/$limit 页';
+  }
+
+  @override
+  String get chatOnlyModelTag => '仅聊天';
+
+  @override
+  String get signedOutStatus => '未登录';
+
+  @override
+  String get accountNameLabel => '名称';
+
+  @override
+  String get accountEmailLabel => '邮箱';
+
+  @override
+  String get accountSubjectLabel => '主体标识';
+
+  @override
+  String get accountExpiresAtLabel => '过期时间';
+
+  @override
+  String get accountBffHint => '当前应用会先通过 Donut 后端建立会话，再访问受保护功能。';
+
+  @override
+  String get refreshSignIn => '刷新登录';
+
+  @override
+  String get signIn => '登录';
+
+  @override
+  String get authErrorGeneric => '登录暂时未能完成，请稍后再试。';
+
+  @override
+  String get authErrorOpenBrowser => '无法打开浏览器，请稍后再试。';
+
+  @override
+  String get authErrorTimedOut => '登录等待时间过长，请重新尝试。';
+
+  @override
+  String get authErrorSessionExpired => '当前登录状态已过期，请重新登录。';
+
+  @override
+  String get authErrorNetwork => '当前网络似乎不可用，请检查后再试。';
+
+  @override
+  String get authErrorNotConfigured => '登录功能尚未配置完成，请联系管理员。';
+
+  @override
+  String get checkAppUpdateTitle => '检查应用更新（Rosemary）';
+
+  @override
+  String checkAppUpdateSubtitle(Object platform) {
+    return '$platform';
+  }
+
+  @override
+  String get platformWeb => '网页';
+
+  @override
+  String get platformAndroid => '安卓';
+
+  @override
+  String get platformIos => 'iOS';
+
+  @override
+  String get platformMacos => 'macOS';
+
+  @override
+  String get platformWindows => 'Windows';
+
+  @override
+  String get platformLinux => 'Linux';
+
+  @override
+  String get platformFuchsia => 'Fuchsia';
+
+  @override
+  String get rosemaryUnsupportedPlatform => '当前平台暂不支持 Rosemary 更新。';
+
+  @override
+  String get rosemaryNotConfigured => 'Rosemary 未配置，请先在 Admin 中完成配置。';
+
+  @override
+  String get rosemaryNoUpdate => '当前已是最新版本。';
+
+  @override
+  String rosemaryNoUpdateWithVersion(Object version) {
+    return '当前已是最新版本（$version）。';
+  }
+
+  @override
+  String get rosemaryCheckFailedBrief => '检查更新失败，请稍后重试。';
+
+  @override
+  String get rosemaryUpdateAvailableTitle => '发现可用更新';
+
+  @override
+  String get rosemaryAppUpdateSectionTitle => '应用更新';
+
+  @override
+  String get rosemaryResourceUpdateSectionTitle => '资源更新';
+
+  @override
+  String get rosemaryAppUpdateAvailable => '有新的应用版本可用。';
+
+  @override
+  String get rosemaryResourceUpdateAvailable => '有新的资源包可用。';
+
+  @override
+  String rosemaryNotesLabel(Object notes) {
+    return '说明：$notes';
+  }
+
+  @override
+  String get rosemaryLater => '稍后';
+
+  @override
+  String get rosemaryStartUpdate => '开始更新';
+
+  @override
+  String get rosemaryPreparingUpdate => '正在准备更新...';
+
+  @override
+  String get rosemaryRunningUpdateTitle => '正在执行 Rosemary 更新';
+
+  @override
+  String get rosemaryProcessing => '处理中...';
+
+  @override
+  String rosemaryProgress(Object progress) {
+    return '进度：$progress%';
+  }
+
+  @override
+  String get rosemaryUpdateFailedCloseAndRetry => '更新失败，请关闭窗口后重试。';
+
+  @override
+  String get rosemaryClose => '关闭';
+
+  @override
+  String get rosemaryUpdateFailedBrief => '更新失败，请稍后重试。';
+
+  @override
+  String get rosemaryUpdateCompleted => '更新流程已完成。';
+
+  @override
+  String get rosemaryChecking => '正在检查更新...';
+
+  @override
+  String get rosemaryDownloadingApp => '正在下载应用更新...';
+
+  @override
+  String get rosemaryInstallingApp => '正在安装应用更新...';
+
+  @override
+  String get rosemaryDownloadingResources => '正在下载资源...';
+
+  @override
+  String get rosemaryInstallingResources => '正在安装资源...';
+
+  @override
+  String get rosemaryDmgOpenedHint => 'DMG 已打开，请挂载后将应用拖入“应用程序”以完成更新。';
+
+  @override
+  String get rosemaryMacDmgPromptTitle => '准备安装更新';
+
+  @override
+  String get rosemaryMacDmgPromptBody => '接下来将打开 DMG。请将新版本应用拖入“应用程序”覆盖安装。打开后本应用会自动退出，以便你完成替换。';
+
+  @override
+  String get rosemaryMacDmgPromptConfirm => '继续并打开 DMG';
 }

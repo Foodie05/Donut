@@ -35,8 +35,45 @@
   "addPdf": "添加 PDF",
   "errorAddingBook": "添加书籍失败: ",
   "aiConfiguration": "AI 配置",
-  "aiCategorySubtitle": "配置模型、接口地址、密钥和回复长度",
+  "aiCategorySubtitle": "配置模型来源、回复长度和自定义连接",
   "apiBaseUrl": "API 基础地址",
+  "serverModelSelection": "服务器模型",
+  "serverModelSelectionSubtitle": "登录后可使用服务器提供的模型",
+  "customModelOption": "自定义",
+  "customModelOptionSubtitle": "使用你自己的模型服务连接",
+  "loginForAiService": "请登录以获得AI服务",
+  "loginForAiServiceSubtitle": "登录后即可使用服务器提供的模型",
+  "recommendedModelTag": "推荐",
+  "customConnectionTitle": "自定义连接",
+  "testConnection": "测试连接",
+  "testingConnection": "测试连接中...",
+  "testConnectionSuccess": "连接成功，已获取 {count} 个模型。",
+  "@testConnectionSuccess": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "testConnectionFailed": "连接失败，请检查 Base URL 和 API Key。",
+  "customConnectionHint": "启用自定义后，将直接使用你填写的 Base URL、模型和 API Key。",
+  "serverModelsUnavailable": "服务器当前没有可用模型，请联系管理员。",
+  "aiServiceUnavailable": "AI服务暂不可用",
+  "aiServiceUnavailableSubtitle": "请选择有效的配置",
+  "aiServiceSignInRequiredSubtitle": "请登录账号以享受服务",
+  "aiUnknownError": "发生未知错误",
+  "aiUnknownErrorSubtitle": "请尝试更换模型或联系开发者",
+  "aiQuotaExceededTitle": "今日额度已用完",
+  "aiQuotaExceededSubtitle": "您已经用完了今天的用量。稍后我们会提供更顺畅的服务，敬请期待！",
+  "aiModelUnavailableTitle": "模型暂不可用",
+  "aiModelUnavailableSubtitle": "模型暂不可用，请尝试使用其他模型或联系开发者",
+  "aiCustomModelHint": "您正在使用自定义模型，切换到Donut提供的模型以获得更稳定的体验。",
+  "aiNetworkUnavailableTitle": "网络无法连接",
+  "aiNetworkUnavailableSubtitle": "网络无法连接，请检查您的网络",
+  "openModelSettings": "前往模型配置",
+  "pageNote": "笔记",
+  "pageNoteHint": "在这里记录这一页的笔记，支持 Markdown。",
+  "pageNoteEmpty": "这一页还没有笔记，点击这里开始编辑。",
+  "editNote": "编辑笔记",
+  "previewNote": "预览笔记",
   "modelReplyLength": "模型回复长度",
   "modelReplyLengthSubtitle": "为模型回复设置上限以节约额度，但可能导致得到的内容不完整",
   "modelReplyLengthShort": "短",
@@ -82,6 +119,8 @@
   "smoothSummarySubtitle": "AI 面板开启时，提前生成下一页摘要",
   "powerSavingMode": "节能模式",
   "powerSavingModeSubtitle": "AI 面板关闭时，不启动新的摘要任务和倒计时",
+  "swapReaderPanels": "对调左右栏",
+  "swapReaderPanelsSubtitle": "交换缩略图栏与 AI 栏的位置",
   "summaryProfiles": "摘要配置文件",
   "createProfile": "新建配置",
   "editProfile": "编辑配置",
@@ -145,5 +184,102 @@
   "releaseNotesTitle": "更新日志",
   "noReleaseNotes": "暂无可展示的更新内容。",
   "confirm": "确认",
-  "restore": "恢复"
+  "restore": "恢复",
+  "account": "账户",
+  "accountCategorySubtitle": "查看登录状态和当前会话信息",
+  "signInTitle": "登录到Donut",
+  "signInSubtitle": "登录到Donut以享受完整体验",
+  "sessionActive": "会话已生效",
+  "sessionExpiresAt": "会话将于 {time} 过期",
+  "@sessionExpiresAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "waitingForBrowserSignIn": "正在等待浏览器完成登录...",
+  "signOut": "退出登录",
+  "authenticatedStatus": "已登录",
+  "dailyQuotaLabel": "今日额度",
+  "dailyQuotaUsage": "{used}/{limit} 页",
+  "@dailyQuotaUsage": {
+    "placeholders": {
+      "used": {},
+      "limit": {}
+    }
+  },
+  "chatOnlyModelTag": "仅聊天",
+  "signedOutStatus": "未登录",
+  "accountNameLabel": "名称",
+  "accountEmailLabel": "邮箱",
+  "accountSubjectLabel": "主体标识",
+  "accountExpiresAtLabel": "过期时间",
+  "accountBffHint": "当前应用会先通过 Donut 后端建立会话，再访问受保护功能。",
+  "refreshSignIn": "刷新登录",
+  "signIn": "登录",
+  "authErrorGeneric": "登录暂时未能完成，请稍后再试。",
+  "authErrorOpenBrowser": "无法打开浏览器，请稍后再试。",
+  "authErrorTimedOut": "登录等待时间过长，请重新尝试。",
+  "authErrorSessionExpired": "当前登录状态已过期，请重新登录。",
+  "authErrorNetwork": "当前网络似乎不可用，请检查后再试。",
+  "authErrorNotConfigured": "登录功能尚未配置完成，请联系管理员。",
+  "checkAppUpdateTitle": "检查应用更新（Rosemary）",
+  "checkAppUpdateSubtitle": "{platform}",
+  "@checkAppUpdateSubtitle": {
+    "placeholders": {
+      "platform": {}
+    }
+  },
+  "platformWeb": "网页",
+  "platformAndroid": "安卓",
+  "platformIos": "iOS",
+  "platformMacos": "macOS",
+  "platformWindows": "Windows",
+  "platformLinux": "Linux",
+  "platformFuchsia": "Fuchsia",
+  "rosemaryUnsupportedPlatform": "当前平台暂不支持 Rosemary 更新。",
+  "rosemaryNotConfigured": "Rosemary 未配置，请先在 Admin 中完成配置。",
+  "rosemaryNoUpdate": "当前已是最新版本。",
+  "rosemaryNoUpdateWithVersion": "当前已是最新版本（{version}）。",
+  "@rosemaryNoUpdateWithVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "rosemaryCheckFailedBrief": "检查更新失败，请稍后重试。",
+  "rosemaryUpdateAvailableTitle": "发现可用更新",
+  "rosemaryAppUpdateSectionTitle": "应用更新",
+  "rosemaryResourceUpdateSectionTitle": "资源更新",
+  "rosemaryAppUpdateAvailable": "有新的应用版本可用。",
+  "rosemaryResourceUpdateAvailable": "有新的资源包可用。",
+  "rosemaryNotesLabel": "说明：{notes}",
+  "@rosemaryNotesLabel": {
+    "placeholders": {
+      "notes": {}
+    }
+  },
+  "rosemaryLater": "稍后",
+  "rosemaryStartUpdate": "开始更新",
+  "rosemaryPreparingUpdate": "正在准备更新...",
+  "rosemaryRunningUpdateTitle": "正在执行 Rosemary 更新",
+  "rosemaryProcessing": "处理中...",
+  "rosemaryProgress": "进度：{progress}%",
+  "@rosemaryProgress": {
+    "placeholders": {
+      "progress": {}
+    }
+  },
+  "rosemaryUpdateFailedCloseAndRetry": "更新失败，请关闭窗口后重试。",
+  "rosemaryClose": "关闭",
+  "rosemaryUpdateFailedBrief": "更新失败，请稍后重试。",
+  "rosemaryUpdateCompleted": "更新流程已完成。",
+  "rosemaryChecking": "正在检查更新...",
+  "rosemaryDownloadingApp": "正在下载应用更新...",
+  "rosemaryInstallingApp": "正在安装应用更新...",
+  "rosemaryDownloadingResources": "正在下载资源...",
+  "rosemaryInstallingResources": "正在安装资源...",
+  "rosemaryDmgOpenedHint": "DMG 已打开，请挂载后将应用拖入“应用程序”以完成更新。"
+  ,
+  "rosemaryMacDmgPromptTitle": "准备安装更新",
+  "rosemaryMacDmgPromptBody": "接下来将打开 DMG。请将新版本应用拖入“应用程序”覆盖安装。打开后本应用会自动退出，以便你完成替换。",
+  "rosemaryMacDmgPromptConfirm": "继续并打开 DMG"
 }

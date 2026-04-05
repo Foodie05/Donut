@@ -314,7 +314,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiCategorySubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Configure model, endpoint, API key, and reply length'**
+  /// **'Configure model source, reply length, and custom connection'**
   String get aiCategorySubtitle;
 
   /// No description provided for @apiBaseUrl.
@@ -322,6 +322,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'API Base URL'**
   String get apiBaseUrl;
+
+  /// No description provided for @serverModelSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Server models'**
+  String get serverModelSelection;
+
+  /// No description provided for @serverModelSelectionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to use models provided by the server'**
+  String get serverModelSelectionSubtitle;
+
+  /// No description provided for @customModelOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get customModelOption;
+
+  /// No description provided for @customModelOptionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use your own model service connection'**
+  String get customModelOptionSubtitle;
+
+  /// No description provided for @loginForAiService.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to access AI service'**
+  String get loginForAiService;
+
+  /// No description provided for @loginForAiServiceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to use server-provided models'**
+  String get loginForAiServiceSubtitle;
+
+  /// No description provided for @recommendedModelTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get recommendedModelTag;
+
+  /// No description provided for @customConnectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom connection'**
+  String get customConnectionTitle;
+
+  /// No description provided for @testConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
+  String get testConnection;
+
+  /// No description provided for @testingConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing connection...'**
+  String get testingConnection;
+
+  /// No description provided for @testConnectionSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection succeeded. Found {count} models.'**
+  String testConnectionSuccess(Object count);
+
+  /// No description provided for @testConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed. Please check the Base URL and API Key.'**
+  String get testConnectionFailed;
+
+  /// No description provided for @customConnectionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'When custom mode is enabled, Donut will use the Base URL, model, and API key you provide here.'**
+  String get customConnectionHint;
+
+  /// No description provided for @serverModelsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No server models are available right now. Please contact the administrator.'**
+  String get serverModelsUnavailable;
+
+  /// No description provided for @aiServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'AI service is unavailable'**
+  String get aiServiceUnavailable;
+
+  /// No description provided for @aiServiceUnavailableSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose a valid configuration'**
+  String get aiServiceUnavailableSubtitle;
+
+  /// No description provided for @aiServiceSignInRequiredSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in to enjoy the service'**
+  String get aiServiceSignInRequiredSubtitle;
+
+  /// No description provided for @aiUnknownError.
+  ///
+  /// In en, this message translates to:
+  /// **'An unknown error occurred'**
+  String get aiUnknownError;
+
+  /// No description provided for @aiUnknownErrorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Please try switching models or contact the developer'**
+  String get aiUnknownErrorSubtitle;
+
+  /// No description provided for @aiQuotaExceededTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily quota reached'**
+  String get aiQuotaExceededTitle;
+
+  /// No description provided for @aiQuotaExceededSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You have used up today\'s quota. We will provide a smoother experience soon. Please stay tuned!'**
+  String get aiQuotaExceededSubtitle;
+
+  /// No description provided for @aiModelUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Model is temporarily unavailable'**
+  String get aiModelUnavailableTitle;
+
+  /// No description provided for @aiModelUnavailableSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The model is temporarily unavailable. Please try another model or contact the developer.'**
+  String get aiModelUnavailableSubtitle;
+
+  /// No description provided for @aiCustomModelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You are using a custom model. Switching to a Donut-provided model may give you a more stable experience.'**
+  String get aiCustomModelHint;
+
+  /// No description provided for @aiNetworkUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Network unavailable'**
+  String get aiNetworkUnavailableTitle;
+
+  /// No description provided for @aiNetworkUnavailableSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Network unavailable. Please check your connection.'**
+  String get aiNetworkUnavailableSubtitle;
+
+  /// No description provided for @openModelSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open model settings'**
+  String get openModelSettings;
+
+  /// No description provided for @pageNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get pageNote;
+
+  /// No description provided for @pageNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write notes for this page here. Markdown is supported.'**
+  String get pageNoteHint;
+
+  /// No description provided for @pageNoteEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no notes for this page yet. Tap here to start writing.'**
+  String get pageNoteEmpty;
+
+  /// No description provided for @editNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit note'**
+  String get editNote;
+
+  /// No description provided for @previewNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview note'**
+  String get previewNote;
 
   /// No description provided for @modelReplyLength.
   ///
@@ -562,6 +754,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When the AI panel is closed, don\'t start new summary tasks or countdowns'**
   String get powerSavingModeSubtitle;
+
+  /// No description provided for @swapReaderPanels.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap side panels'**
+  String get swapReaderPanels;
+
+  /// No description provided for @swapReaderPanelsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap the thumbnail sidebar and AI panel positions'**
+  String get swapReaderPanelsSubtitle;
 
   /// No description provided for @summaryProfiles.
   ///
@@ -916,6 +1120,396 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restore'**
   String get restore;
+
+  /// No description provided for @account.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get account;
+
+  /// No description provided for @accountCategorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review your login status and active session'**
+  String get accountCategorySubtitle;
+
+  /// No description provided for @signInTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to Donut'**
+  String get signInTitle;
+
+  /// No description provided for @signInSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to Donut to enjoy the full experience.'**
+  String get signInSubtitle;
+
+  /// No description provided for @sessionActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Session active'**
+  String get sessionActive;
+
+  /// No description provided for @sessionExpiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Session expires at {time}'**
+  String sessionExpiresAt(Object time);
+
+  /// No description provided for @waitingForBrowserSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for browser sign-in...'**
+  String get waitingForBrowserSignIn;
+
+  /// No description provided for @signOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get signOut;
+
+  /// No description provided for @authenticatedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticated'**
+  String get authenticatedStatus;
+
+  /// No description provided for @dailyQuotaLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s quota'**
+  String get dailyQuotaLabel;
+
+  /// No description provided for @dailyQuotaUsage.
+  ///
+  /// In en, this message translates to:
+  /// **'{used}/{limit} pages'**
+  String dailyQuotaUsage(Object used, Object limit);
+
+  /// No description provided for @chatOnlyModelTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat only'**
+  String get chatOnlyModelTag;
+
+  /// No description provided for @signedOutStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out'**
+  String get signedOutStatus;
+
+  /// No description provided for @accountNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get accountNameLabel;
+
+  /// No description provided for @accountEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get accountEmailLabel;
+
+  /// No description provided for @accountSubjectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get accountSubjectLabel;
+
+  /// No description provided for @accountExpiresAtLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires at'**
+  String get accountExpiresAtLabel;
+
+  /// No description provided for @accountBffHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This app now uses a Donut backend session before accessing protected features.'**
+  String get accountBffHint;
+
+  /// No description provided for @refreshSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh sign-in'**
+  String get refreshSignIn;
+
+  /// No description provided for @signIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get signIn;
+
+  /// No description provided for @authErrorGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t complete sign-in. Please try again.'**
+  String get authErrorGeneric;
+
+  /// No description provided for @authErrorOpenBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t open the browser. Please try again.'**
+  String get authErrorOpenBrowser;
+
+  /// No description provided for @authErrorTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in took too long. Please try again.'**
+  String get authErrorTimedOut;
+
+  /// No description provided for @authErrorSessionExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session expired. Please sign in again.'**
+  String get authErrorSessionExpired;
+
+  /// No description provided for @authErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'The network connection looks unavailable right now.'**
+  String get authErrorNetwork;
+
+  /// No description provided for @authErrorNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in is not configured yet. Please contact the administrator.'**
+  String get authErrorNotConfigured;
+
+  /// No description provided for @checkAppUpdateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check App Updates (Rosemary)'**
+  String get checkAppUpdateTitle;
+
+  /// No description provided for @checkAppUpdateSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{platform}'**
+  String checkAppUpdateSubtitle(Object platform);
+
+  /// No description provided for @platformWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Web'**
+  String get platformWeb;
+
+  /// No description provided for @platformAndroid.
+  ///
+  /// In en, this message translates to:
+  /// **'Android'**
+  String get platformAndroid;
+
+  /// No description provided for @platformIos.
+  ///
+  /// In en, this message translates to:
+  /// **'iOS'**
+  String get platformIos;
+
+  /// No description provided for @platformMacos.
+  ///
+  /// In en, this message translates to:
+  /// **'macOS'**
+  String get platformMacos;
+
+  /// No description provided for @platformWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows'**
+  String get platformWindows;
+
+  /// No description provided for @platformLinux.
+  ///
+  /// In en, this message translates to:
+  /// **'Linux'**
+  String get platformLinux;
+
+  /// No description provided for @platformFuchsia.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuchsia'**
+  String get platformFuchsia;
+
+  /// No description provided for @rosemaryUnsupportedPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'Rosemary updates are not supported on this platform.'**
+  String get rosemaryUnsupportedPlatform;
+
+  /// No description provided for @rosemaryNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Rosemary is not configured. Please configure it in Admin first.'**
+  String get rosemaryNotConfigured;
+
+  /// No description provided for @rosemaryNoUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re already on the latest version.'**
+  String get rosemaryNoUpdate;
+
+  /// No description provided for @rosemaryNoUpdateWithVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re already on the latest version ({version}).'**
+  String rosemaryNoUpdateWithVersion(Object version);
+
+  /// No description provided for @rosemaryCheckFailedBrief.
+  ///
+  /// In en, this message translates to:
+  /// **'Update check failed. Please try again later.'**
+  String get rosemaryCheckFailedBrief;
+
+  /// No description provided for @rosemaryUpdateAvailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Available'**
+  String get rosemaryUpdateAvailableTitle;
+
+  /// No description provided for @rosemaryAppUpdateSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'App Update'**
+  String get rosemaryAppUpdateSectionTitle;
+
+  /// No description provided for @rosemaryResourceUpdateSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Resource Update'**
+  String get rosemaryResourceUpdateSectionTitle;
+
+  /// No description provided for @rosemaryAppUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'A new app version is available.'**
+  String get rosemaryAppUpdateAvailable;
+
+  /// No description provided for @rosemaryResourceUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'A new resource package is available.'**
+  String get rosemaryResourceUpdateAvailable;
+
+  /// No description provided for @rosemaryNotesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes: {notes}'**
+  String rosemaryNotesLabel(Object notes);
+
+  /// No description provided for @rosemaryLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get rosemaryLater;
+
+  /// No description provided for @rosemaryStartUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Update'**
+  String get rosemaryStartUpdate;
+
+  /// No description provided for @rosemaryPreparingUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing update...'**
+  String get rosemaryPreparingUpdate;
+
+  /// No description provided for @rosemaryRunningUpdateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Running Rosemary Update'**
+  String get rosemaryRunningUpdateTitle;
+
+  /// No description provided for @rosemaryProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing...'**
+  String get rosemaryProcessing;
+
+  /// No description provided for @rosemaryProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress: {progress}%'**
+  String rosemaryProgress(Object progress);
+
+  /// No description provided for @rosemaryUpdateFailedCloseAndRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Update failed. Please close and try again.'**
+  String get rosemaryUpdateFailedCloseAndRetry;
+
+  /// No description provided for @rosemaryClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get rosemaryClose;
+
+  /// No description provided for @rosemaryUpdateFailedBrief.
+  ///
+  /// In en, this message translates to:
+  /// **'Update failed. Please try again later.'**
+  String get rosemaryUpdateFailedBrief;
+
+  /// No description provided for @rosemaryUpdateCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Update completed.'**
+  String get rosemaryUpdateCompleted;
+
+  /// No description provided for @rosemaryChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates...'**
+  String get rosemaryChecking;
+
+  /// No description provided for @rosemaryDownloadingApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading app update...'**
+  String get rosemaryDownloadingApp;
+
+  /// No description provided for @rosemaryInstallingApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing app update...'**
+  String get rosemaryInstallingApp;
+
+  /// No description provided for @rosemaryDownloadingResources.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading resources...'**
+  String get rosemaryDownloadingResources;
+
+  /// No description provided for @rosemaryInstallingResources.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing resources...'**
+  String get rosemaryInstallingResources;
+
+  /// No description provided for @rosemaryDmgOpenedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'DMG opened. Mount it and drag the app into Applications to finish the update.'**
+  String get rosemaryDmgOpenedHint;
+
+  /// No description provided for @rosemaryMacDmgPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to Install Update'**
+  String get rosemaryMacDmgPromptTitle;
+
+  /// No description provided for @rosemaryMacDmgPromptBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The DMG will open next. Drag the new app into Applications to replace the current one. After opening the DMG, this app will quit automatically so replacement can proceed.'**
+  String get rosemaryMacDmgPromptBody;
+
+  /// No description provided for @rosemaryMacDmgPromptConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue and Open DMG'**
+  String get rosemaryMacDmgPromptConfirm;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
